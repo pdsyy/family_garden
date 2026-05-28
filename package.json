@@ -12,7 +12,7 @@
     "postinstall": "node scripts/init-db.js"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": "22.15.0"
   },
   "dependencies": {
     "express": "^4.21.2",
