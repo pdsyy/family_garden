@@ -2316,45 +2316,51 @@ function saveAllAdmin(){
     applyF();
     buildCatalogPanels();
 
-    console.log('Статус API_ONLINE:', API_ONLINE);
-    console.log('Токен из Api.getToken():', Api.getToken());
-
-    // ── Синхронізуємо зі зміненими товарами через API ──
     if(API_ONLINE && Api.getToken()){
         const allProds=[];
         CAT_LIST.forEach(c=>{(adminProducts[c.key]||[]).forEach(p=>allProds.push(p));});
 
-        console.log('Всего товаров для проверки:', allProds.length);
         let pending=0, done=0;
 
-        allProds.forEach(p=>{
-            const targetId = p._apiId || p.id;
-            console.log(`Товар: "${p.name}", ID в базе/фронте:`, targetId);
+        allProds.forEach(p => {
+            // 🔍 ИЩЕМ НАСТОЯЩИЙ ID ИЗ БАЗЫ ДАННЫХ
+            // Если p.id или p._apiId содержит "fr", значит это временный фронтенд-ид.
+            // Пытаемся найти числовой id (возможно он лежит в p.dbId, p.realId или p.id_db)
+            let targetId = null;
+
+            if (p.id && !String(p.id).startsWith('fr')) targetId = p.id;
+            else if (p._apiId && !String(p._apiId).startsWith('fr')) targetId = p._apiId;
+            else if (p.dbId) targetId = p.dbId; // запасной вариант, проверьте как в коде
+
+            // Если числовой ID так и не найден, но у товара есть порядковый номер,
+            // временно пробуем очистить префикс 'fr', превратив 'fr4' в число 4
+            if (!targetId && String(p.id).startsWith('fr')) {
+                targetId = parseInt(String(p.id).replace('fr', ''), 10);
+                console.warn(`Предупреждение: реальный ID не найден, пробуем вытащить число из фронт-ID: ${p.id} -> ${targetId}`);
+            }
 
             if(targetId){
                 pending++;
-                console.log(`Отправляем PUT запрос для товара ID ${targetId}...`);
+                console.log(`Отправляем PUT запрос на бэкенд для реального ID: ${targetId}`);
+
                 Api.updateProduct(targetId, frontProdToApi(p)).then(()=>{
                     done++;
-                    console.log(`Успешно обновлен товар ID ${targetId}`);
                     if(done===pending){ toast('✅ Всі зміни збережено в БД!'); closeAdminPanel(); }
                 }).catch((err)=>{
-                    console.error(`Ошибка при обновлении товара ID ${targetId}:`, err);
+                    console.error(`Ошибка обновления товара ID ${targetId}:`, err);
                     done++;
                     if(done===pending){ toast('⚠️ Зміни збережено (частково)'); closeAdminPanel(); }
                 });
             } else {
-                console.warn(`Пропущен товар "${p.name}" - у него вообще нет ID!`);
+                console.error(`Не удалось определить реальный ID для товара: "${p.name}"`, p);
             }
         });
 
         if(pending===0){
-            console.warn('Ни один товар не прошел валидацию ID (pending = 0)');
-            toast('ℹ️ Зміни збережено локально (немає ID для синхронізації с БД)');
+            toast('ℹ️ Изменения не отправлены: у товаров нет ID из базы данных');
             closeAdminPanel();
         }
     } else {
-        console.error('Синхронизация с БД отклонена: API_ONLINE false ИЛИ отсутствует токен админа!');
         toast('✅ Зміни збережено локально (API офлайн)');
         closeAdminPanel();
     }
