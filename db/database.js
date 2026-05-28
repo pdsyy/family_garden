@@ -141,6 +141,40 @@ function initSchema() {
   } catch (err) {
     console.error('Ошибка при инициализации администратора:', err);
   }
+  // 3. АВТО-ЗАПОЛНЕНИЕ БАЗЫ ДЕФОЛТНЫМИ ТОВАРАМИ (ЕСЛИ ТАБЛИЦА ПУСТА)
+  try {
+    const productCount = db.prepare('SELECT COUNT(*) AS count FROM products').get().count;
+
+    if (productCount === 0) {
+      console.log('📦 Таблица товаров пуста. Заполняем базу стартовым каталогом...');
+
+      const defaultProducts = [
+        { name: 'Банан', category: 'fruits', price: 70, unit: 'кг', description: 'Свіжі банани' },
+        { name: 'Яблуко Симиренко', category: 'fruits', price: 35, unit: 'кг', description: 'Соковиті зелені яблука' },
+        { name: 'Томати черрі', category: 'vegetables', price: 120, unit: 'кг', description: 'Солодкі томати' },
+        { name: 'Огірки тепличні', category: 'vegetables', price: 85, unit: 'кг', description: 'Хрусткі огірки' },
+        { name: 'Кріп', category: 'greens', price: 20, unit: 'шт', description: 'Свіжа зелень' },
+        { name: 'Петрушка', category: 'greens', price: 20, unit: 'шт', description: 'Свіжа зелень' },
+        // При необходимости добавьте сюда остальные 11 дефолтных товаров строго в том порядке,
+        // в каком они идут на фронтенде, чтобы их ID (1, 2, 3...) совпали с порядком фронта.
+      ];
+
+      const insertProduct = db.prepare(`
+        INSERT INTO products (name, category, price, unit, description, is_active)
+        VALUES (@name, @category, @price, @unit, @description, 1)
+      `);
+
+      // Запускаем транзакцию для быстрой вставки
+      const insertMany = db.transaction((products) => {
+        for (const p of products) insertProduct.run(p);
+      });
+
+      insertMany(defaultProducts);
+      console.log(`✅ База данных успешно инициализирована ${defaultProducts.length} товарами.`);
+    }
+  } catch (err) {
+    console.error('Ошибка при авто-заполнении товаров:', err);
+  }
 }
 
 initSchema();
