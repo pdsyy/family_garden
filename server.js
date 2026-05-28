@@ -30,7 +30,21 @@ const app = express();
 app.set('trust proxy', 1);
 
 // ── Безопасность ──
-app.use(helmet());
+app.use(
+    helmet({
+      contentSecurityPolicy: {
+        directives: {
+          ...helmet.contentSecurityPolicy.getDefaultDirectives(),
+          // Разрешаем выполнение инлайновых скриптов (<script>...</script>)
+          "script-src": ["'self'", "'unsafe-inline'"],
+          // Разрешаем инлайновые атрибуты-события (onclick, onload и т.д.)
+          "script-src-attr": ["'self'", "'unsafe-inline'"],
+          // Если у вас в HTML используются инлайновые стили (style="..."), стоит добавить и это:
+          "style-src": ["'self'", "'unsafe-inline'"],
+        },
+      },
+    })
+);
 
 // CORS: разрешаем только перечисленные origin'ы
 const allowedOrigins = (process.env.CORS_ORIGIN || '')
