@@ -17,7 +17,7 @@ if (!fs.existsSync(dbDir)) {
 const db = new Database(DB_PATH);
 
 // WAL-режим: лучше для конкурентного чтения/записи, быстрее
-db.pragma('journal_mode = WAL');
+db.pragma('journal_mode = DELETE');
 // FK constraints должны быть включены явно
 db.pragma('foreign_keys = ON');
 // Безопаснее для долгоживущего сервера
