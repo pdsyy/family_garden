@@ -30,6 +30,7 @@ const productCreateSchema = z.object({
 const productUpdateSchema = productCreateSchema.partial().refine(
   obj => Object.keys(obj).length > 0,
   { message: 'At least one field must be provided' }
+
 );
 
 const listQuerySchema = z.object({
