@@ -2304,35 +2304,48 @@ function saveOneProduct(id){
 }
 
 function saveAllAdmin(){
-  // apply all adminProducts to P
-  CAT_LIST.forEach(c=>{
-    if(adminProducts[c.key])P[c.key]=adminProducts[c.key].map(p=>({...p,catName:CAT_LIST.find(x=>x.key===p.cat)?.label||p.cat}));
-  });
-  ALL.length=0;
-  CAT_LIST.forEach(c=>{(P[c.key]||[]).forEach(x=>ALL.push(x));});
-  renderHomePopular();
-  applyF();
-  buildCatalogPanels();
-
-  // ── Синхронізуємо зі зміненими товарами через API ──
-  if(API_ONLINE&&Api.getToken()){
-    const allProds=[];
-    CAT_LIST.forEach(c=>{(adminProducts[c.key]||[]).forEach(p=>allProds.push(p));});
-    let pending=0,done=0;
-    allProds.forEach(p=>{
-      if(p._apiId){
-        pending++;
-        Api.updateProduct(p._apiId, frontProdToApi(p)).then(()=>{
-          done++;
-          if(done===pending){ toast('✅ Всі зміни збережено в БД!'); closeAdminPanel(); }
-        }).catch(()=>{ done++; if(done===pending){ toast('✅ Зміни збережено (частково)'); closeAdminPanel(); } });
-      }
+    // apply all adminProducts to P
+    CAT_LIST.forEach(c=>{
+        if(adminProducts[c.key]) P[c.key]=adminProducts[c.key].map(p=>({...p,catName:CAT_LIST.find(x=>x.key===p.cat)?.label||p.cat}));
     });
-    if(pending===0){ toast('✅ Всі зміни збережено!'); closeAdminPanel(); }
-  } else {
-    toast('✅ Всі зміни збережено!');
-    closeAdminPanel();
-  }
+    ALL.length=0;
+    CAT_LIST.forEach(c=>{(P[c.key]||[]).forEach(x=>ALL.push(x));});
+    renderHomePopular();
+    applyF();
+    buildCatalogPanels();
+
+    // ── Синхронізуємо зі зміненими товарами через API ──
+    if(API_ONLINE && Api.getToken()){
+        const allProds=[];
+        CAT_LIST.forEach(c=>{(adminProducts[c.key]||[]).forEach(p=>allProds.push(p));});
+
+        let pending=0, done=0;
+
+        allProds.forEach(p=>{
+            // ПОДСТРАХОВКА: берем либо _apiId, либо оригинальный id из базы SQLite
+            const targetId = p._apiId || p.id;
+
+            if(targetId){
+                pending++;
+                Api.updateProduct(targetId, frontProdToApi(p)).then(()=>{
+                    done++;
+                    if(done===pending){ toast('✅ Всі зміни збережено в БД!'); closeAdminPanel(); }
+                }).catch((err)=>{
+                    console.error('Помилка оновлення товару:', err);
+                    done++;
+                    if(done===pending){ toast('⚠️ Зміни збережено (частково)'); closeAdminPanel(); }
+                });
+            }
+        });
+
+        if(pending===0){
+            toast('ℹ️ Зміни збережено локально (немає ID для синхронізації з БД)');
+            closeAdminPanel();
+        }
+    } else {
+        toast('✅ Зміни збережено локально (API офлайн)');
+        closeAdminPanel();
+    }
 }
 
 function addNewProduct(){
