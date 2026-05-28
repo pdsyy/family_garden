@@ -5,6 +5,7 @@
 const Database = require('better-sqlite3');
 const path = require('path');
 const fs = require('fs');
+const bcrypt = require('bcryptjs'); // Подключаем bcryptjs для правильного хэширования
 
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, 'shop.db');
 
@@ -16,7 +17,7 @@ if (!fs.existsSync(dbDir)) {
 
 const db = new Database(DB_PATH);
 
-// WAL-режим: лучше для конкурентного чтения/записи, быстрее
+// Режим DELETE: стабильная синхронная запись напрямую в файл базы данных
 db.pragma('journal_mode = DELETE');
 // FK constraints должны быть включены явно
 db.pragma('foreign_keys = ON');
@@ -111,6 +112,35 @@ function initSchema() {
         UPDATE orders SET updated_at = datetime('now') WHERE id = OLD.id;
       END;
   `);
+
+  // ── Авто-создание/обновление администратора с правильным bcrypt хэшем ──
+  try {
+    const defaultUser = process.env.ADMIN_USERNAME || 'admin';
+    const defaultPass = process.env.ADMIN_PASSWORD || 'admin1234';
+
+    // Временная очистка старых записей, у которых хэш был сгенерирован не через bcrypt
+    // (поскольку bcrypt хэши всегда начинаются с символа '$')
+    db.prepare("DELETE FROM users WHERE password_hash NOT LIKE '$2%'").run();
+
+    const userCount = db.prepare('SELECT COUNT(*) AS count FROM users').get().count;
+
+    if (userCount === 0) {
+      console.log('🚨 Таблица пользователей пуста или содержала старые хэши. Создаем корректного администратора...');
+
+      // Генерируем хэш, который роут auth/login сможет успешно проверить
+      const hash = bcrypt.hashSync(defaultPass, 10);
+
+      const insertAdmin = db.prepare(`
+        INSERT INTO users (username, password_hash, role) 
+        VALUES (?, ?, 'admin')
+      `);
+
+      insertAdmin.run(defaultUser, hash);
+      console.log(`✅ Администратор "${defaultUser}" успешно зарегистрирован.`);
+    }
+  } catch (err) {
+    console.error('Ошибка при инициализации администратора:', err);
+  }
 }
 
 initSchema();
