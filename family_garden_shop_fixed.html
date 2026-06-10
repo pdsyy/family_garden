@@ -2069,9 +2069,22 @@ function authTab(t){document.querySelectorAll('.auth-tab').forEach(b=>b.classLis
 function doLogin(){
   const ph=document.getElementById('l-ph').value.trim(),ps=document.getElementById('l-ps').value;
   if(!ph||!ps){toast('⚠️ Заповніть всі поля');return;}
-  try{const stored=localStorage.getItem('fg_user');if(stored){const u=JSON.parse(stored);if((u.phone===ph||u.email===ph)&&u.password===ps){user=u;saveUser();closeM('auth-modal');renderAccount();pg('account');toast('Вітаємо, '+user.name+'!');return;}}}catch(e){}
-  user={name:'Клієнт FG',phone:ph,tg:'',addr:'',password:ps,orders:[]};
-  saveUser();closeM('auth-modal');renderAccount();pg('account');toast('Вітаємо!');
+  try{
+    const stored=localStorage.getItem('fg_user');
+    if(stored){
+      const u=JSON.parse(stored);
+      if((u.phone===ph||u.email===ph)&&u.password===ps){
+        user=u;saveUser();closeM('auth-modal');renderAccount();pg('account');
+        toast('Вітаємо, '+user.name+'!');return;
+      } else {
+        // Акаунт є але пароль невірний
+        toast('⚠️ Невірний пароль');return;
+      }
+    }
+  }catch(e){}
+  // Акаунту немає — пропонуємо зареєструватись
+  toast('⚠️ Акаунт не знайдено. Зареєструйтесь');
+  authTab('register');
 }
 function doRegister(){
   const nm=document.getElementById('r-nm').value.trim(),ph=document.getElementById('r-ph').value.trim(),ps=document.getElementById('r-ps').value;
