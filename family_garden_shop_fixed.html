@@ -2322,6 +2322,16 @@ function addNewProduct(){
 function filterAdminCat(val){renderAdminTable(val);}
 
 // ── CREATE PRODUCT FORM ──
+function previewAdmImg(url){
+  const prev=document.getElementById('afc-img-preview');
+  const img=document.getElementById('afc-img-preview-img');
+  if(url&&url.startsWith('http')){
+    img.src=url;
+    prev.style.display='block';
+  }else{
+    prev.style.display='none';
+  }
+}
 function openCreateForm(editId){
   const form=document.getElementById('adm-create-panel');
   const title=document.getElementById('adm-form-title');
@@ -2334,6 +2344,7 @@ function openCreateForm(editId){
   const priceFld=document.getElementById('afc-price');
   const unitFld=document.getElementById('afc-unit');
   const minFld=document.getElementById('afc-min');
+  const imgFld=document.getElementById('afc-img');
   const stockFld=document.getElementById('afc-stock');
 
   if(isEdit){
@@ -2346,6 +2357,11 @@ function openCreateForm(editId){
     unitFld.value=p.unit;
     minFld.value=p.min||'';
     stockFld.checked=p.inStock!==false;
+    if(imgFld){
+      // Показуємо URL якщо це http, інакше — порожньо (ключ IMGS не редагується)
+      imgFld.value=(p.img&&p.img.startsWith('http'))?p.img:'';
+      previewAdmImg(imgFld.value);
+    }
     form.dataset.editId=editId;
   } else {
     const curCat=document.getElementById('adm-cat-filter').value;
@@ -2354,6 +2370,7 @@ function openCreateForm(editId){
     priceFld.value='';
     unitFld.value='кг';
     minFld.value='від 1 кг';
+    if(imgFld){imgFld.value='';previewAdmImg('');}
     stockFld.checked=true;
     delete form.dataset.editId;
   }
@@ -2375,6 +2392,7 @@ function saveCreateForm(){
   const price=parseFloat(document.getElementById('afc-price').value)||0;
   const unit=document.getElementById('afc-unit').value.trim()||'кг';
   const min=document.getElementById('afc-min').value.trim();
+  const imgUrl=(document.getElementById('afc-img')?.value||'').trim()||null;
   const inStock=document.getElementById('afc-stock').checked;
 
   if(!name){document.getElementById('afc-name').focus();return;}
@@ -2388,7 +2406,7 @@ function saveCreateForm(){
     const found=findProd(editId);
     if(found){
       const oldCat=found.p.cat;
-      Object.assign(found.p,{name,price,unit,min,cat,catName:catLabel,inStock});
+      Object.assign(found.p,{name,price,unit,min,cat,catName:catLabel,inStock,img:imgUrl||found.p.img});
       // if cat changed: move in adminProducts
       if(oldCat!==cat){
         const oldArr=adminProducts[oldCat]||[];
@@ -2402,16 +2420,16 @@ function saveCreateForm(){
     }
     const apiId=found.p._apiId;
     if(API_ONLINE&&Api.getToken()&&apiId){
-      Api.updateProduct(apiId,{name,category:cat,price,unit,min_order:min||null,is_active:inStock})
+      Api.updateProduct(apiId,{name,category:cat,price,unit,min_order:min||null,image_url:imgUrl,is_active:inStock})
         .then(r=>toast(r.ok?`✅ "${name}" збережено в БД`:`✅ "${name}" оновлено`))
         .catch(()=>toast(`✅ "${name}" оновлено`));
     }else{toast(`✅ "${name}" оновлено`);}
   } else {
     const newId='prod_'+Date.now();
-    const newP={id:newId,name,price,unit,min,cat,catName:catLabel,ico:icoMap[cat]||'Iv',inStock};
+    const newP={id:newId,name,price,unit,min,cat,catName:catLabel,ico:icoMap[cat]||'Iv',inStock,img:imgUrl||null};
     if(!adminProducts[cat])adminProducts[cat]=[];
     if(API_ONLINE&&Api.getToken()){
-      Api.createProduct({name,category:cat,price,unit,min_order:min||null,is_active:inStock}).then(r=>{
+      Api.createProduct({name,category:cat,price,unit,min_order:min||null,image_url:imgUrl,is_active:inStock}).then(r=>{
         if(r.ok&&r.data){newP._apiId=r.data.id;newP.id='api_'+r.data.id;}
         adminProducts[cat].unshift(newP);
         toast(`✅ "${name}" додано в БД`);
@@ -2944,6 +2962,13 @@ function deleteOrder(orderId, clientKey){
         <div class="adm-form-field">
           <label>Мінімальне замовлення</label>
           <input type="text" id="afc-min" placeholder="від 1 кг"/>
+        </div>
+        <div class="adm-form-field">
+          <label>Картинка (URL)</label>
+          <input type="url" id="afc-img" placeholder="https://..." oninput="previewAdmImg(this.value)"/>
+          <div id="afc-img-preview" style="display:none;margin-top:8px;border-radius:var(--rxs);overflow:hidden;height:120px;background:var(--gpal)">
+            <img id="afc-img-preview-img" src="" alt="preview" style="width:100%;height:100%;object-fit:cover" onerror="document.getElementById('afc-img-preview').style.display='none'"/>
+          </div>
         </div>
         <div class="adm-toggle-row">
           <div>
