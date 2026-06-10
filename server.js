@@ -17,6 +17,7 @@ const cors         = require('cors');
 const rLimit       = require('express-rate-limit');
 const path         = require('path');
 const authRoutes   = require('./routes/auth');
+const uploadRoutes = require('./routes/upload');
 const productRoutes = require('./routes/products');
 const orderRoutes  = require('./routes/orders');
 const errorHandler = require('./middleware/errorHandler');
@@ -45,6 +46,11 @@ const HTML = path.join(__dirname, 'family_garden_shop_fixed.html');
 app.get('/', (req, res) => res.sendFile(HTML));
 app.use(express.static(__dirname, { index: false }));
 
+// Статична роздача завантажених картинок
+const { UPLOAD_DIR } = require('./routes/upload');
+const express_static = require('express');
+app.use('/uploads', express_static.static(UPLOAD_DIR));
+
 /* ── Health ── */
 app.get('/health', (req, res) =>
   res.json({ status: 'ok', uptime: Math.round(process.uptime()), db: 'sqlite' })
@@ -52,6 +58,7 @@ app.get('/health', (req, res) =>
 
 /* ── API routes ── */
 app.use('/api/auth',     authRoutes);
+app.use('/api/upload',   uploadRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/orders',   orderRoutes);
 

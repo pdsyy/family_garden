@@ -10,9 +10,6 @@
 <meta property="og:description" content="Свіжі овочі, фрукти та зелень з доставкою по Бровари і Київ тричі на тиждень"/>
 <meta property="og:type" content="website"/>
 <meta property="og:locale" content="uk_UA"/>
-    <meta property="og:image" content="https://i1.sndcdn.com/artworks-oCdjPGb2gSF2LGDD-1qByGw-t1080x1080.jpg"/>
-    <meta property="og:image:width" content="512"/>
-    <meta property="og:image:height" content="512"/>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E🌱%3C/text%3E%3C/svg%3E"/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
@@ -2328,12 +2325,64 @@ function filterAdminCat(val){renderAdminTable(val);}
 function previewAdmImg(url){
   const prev=document.getElementById('afc-img-preview');
   const img=document.getElementById('afc-img-preview-img');
-  if(url&&url.startsWith('http')){
+  if(url){
     img.src=url;
     prev.style.display='block';
   }else{
     prev.style.display='none';
   }
+}
+async function uploadAdmImg(input){
+  const file=input.files[0];
+  if(!file)return;
+  if(file.size>3*1024*1024){
+    toast('⚠️ Файл завеликий. Максимум 3 МБ');
+    input.value='';
+    return;
+  }
+  const filenameEl=document.getElementById('afc-img-filename');
+  if(filenameEl)filenameEl.textContent='Завантаження...';
+
+  // Показуємо превʼю одразу (локально)
+  const reader=new FileReader();
+  reader.onload=e=>previewAdmImg(e.target.result);
+  reader.readAsDataURL(file);
+
+  // Відправляємо на сервер
+  const formData=new FormData();
+  formData.append('image',file);
+  try{
+    const tok=Api.getToken();
+    const res=await fetch('/api/upload',{
+      method:'POST',
+      headers:tok?{Authorization:'Bearer '+tok}:{},
+      body:formData,
+    });
+    const data=await res.json();
+    if(res.ok&&data.url){
+      // Зберігаємо серверний URL в поле
+      const urlFld=document.getElementById('afc-img');
+      if(urlFld){urlFld.value=data.url;previewAdmImg(data.url);}
+      if(filenameEl)filenameEl.textContent=file.name;
+      toast('✅ Картинку завантажено');
+    }else{
+      // Сервер не підтримує — залишаємо base64
+      if(filenameEl)filenameEl.textContent=file.name+'  (локально)';
+      toast('⚠️ Збережено локально');
+    }
+  }catch(e){
+    // Офлайн — залишаємо base64 превʼю
+    if(filenameEl)filenameEl.textContent=file.name+' (офлайн)';
+  }
+}
+function clearAdmImg(){
+  const urlFld=document.getElementById('afc-img');
+  const fileFld=document.getElementById('afc-img-file');
+  const filename=document.getElementById('afc-img-filename');
+  if(urlFld)urlFld.value='';
+  if(fileFld)fileFld.value='';
+  if(filename)filename.textContent='';
+  previewAdmImg('');
 }
 function openCreateForm(editId){
   const form=document.getElementById('adm-create-panel');
@@ -2385,6 +2434,10 @@ function openCreateForm(editId){
     unitFld.value='кг';
     minFld.value='від 1 кг';
     if(imgFld){imgFld.value='';previewAdmImg('');}
+    const fileFld2=document.getElementById('afc-img-file');
+    const fname=document.getElementById('afc-img-filename');
+    if(fileFld2)fileFld2.value='';
+    if(fname)fname.textContent='';
     stockFld.checked=true;
     delete form.dataset.editId;
   }
@@ -2978,10 +3031,18 @@ function deleteOrder(orderId, clientKey){
           <input type="text" id="afc-min" placeholder="від 1 кг"/>
         </div>
         <div class="adm-form-field">
-          <label>Картинка (URL)</label>
-          <input type="url" id="afc-img" placeholder="https://..." oninput="previewAdmImg(this.value)"/>
-          <div id="afc-img-preview" style="display:none;margin-top:8px;border-radius:var(--rxs);overflow:hidden;height:120px;background:var(--gpal)">
+          <label>Картинка</label>
+          <input type="url" id="afc-img" placeholder="https://... (вставте URL)" oninput="previewAdmImg(this.value)" style="margin-bottom:6px"/>
+          <div style="display:flex;align-items:center;gap:8px">
+            <label for="afc-img-file" style="display:inline-flex;align-items:center;gap:6px;background:var(--gpal);border:1.5px solid var(--gbor);color:var(--g2);border-radius:var(--rxs);padding:8px 14px;font:700 13px/1 var(--fb);cursor:pointer;transition:all .15s;white-space:nowrap" onmouseover="this.style.background='var(--gbor)'" onmouseout="this.style.background='var(--gpal)'">
+              📁 Завантажити з пристрою
+            </label>
+            <input type="file" id="afc-img-file" accept="image/*" style="display:none" onchange="uploadAdmImg(this)"/>
+            <span id="afc-img-filename" style="font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:140px"></span>
+          </div>
+          <div id="afc-img-preview" style="display:none;margin-top:8px;border-radius:var(--rxs);overflow:hidden;height:140px;background:var(--gpal);position:relative">
             <img id="afc-img-preview-img" src="" alt="preview" style="width:100%;height:100%;object-fit:cover" onerror="document.getElementById('afc-img-preview').style.display='none'"/>
+            <button onclick="clearAdmImg()" style="position:absolute;top:6px;right:6px;background:rgba(0,0,0,.55);color:#fff;border:none;border-radius:50%;width:24px;height:24px;font-size:14px;cursor:pointer;line-height:1;display:flex;align-items:center;justify-content:center" title="Видалити картинку">✕</button>
           </div>
         </div>
         <div class="adm-toggle-row">
