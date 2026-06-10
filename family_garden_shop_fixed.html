@@ -1181,6 +1181,74 @@ footer{background:var(--g1);color:rgba(255,255,255,.65);padding:32px 28px;displa
 </nav>
 <div class="toast" id="toast"></div>
 <script>
+// ══════════════════════════════════════════════
+// API MODULE
+// ══════════════════════════════════════════════
+const Api={
+  _tok:null,
+  setToken(t){this._tok=t;try{sessionStorage.setItem('fg_jwt',t);}catch(e){}},
+  getToken(){if(!this._tok){try{this._tok=sessionStorage.getItem('fg_jwt');}catch(e){}}return this._tok;},
+  clearToken(){this._tok=null;try{sessionStorage.removeItem('fg_jwt');}catch(e){}},
+  async _req(method,path,body){
+    const h={'Content-Type':'application/json'};
+    const tok=this.getToken();
+    if(tok)h['Authorization']='Bearer '+tok;
+    const opts={method,headers:h};
+    if(body!==undefined)opts.body=JSON.stringify(body);
+    try{
+      const r=await fetch(path,opts);
+      if(r.status===204)return{ok:true};
+      const d=await r.json().catch(()=>({}));
+      if(!r.ok)return{ok:false,error:d.error||('Error '+r.status),status:r.status};
+      return{ok:true,data:d};
+    }catch(e){return{ok:false,error:'No connection',network:true};}
+  },
+  get(p){return this._req('GET',p);},
+  post(p,b){return this._req('POST',p,b);},
+  put(p,b){return this._req('PUT',p,b);},
+  patch(p,b){return this._req('PATCH',p,b);},
+  del(p){return this._req('DELETE',p);},
+  login(u,pw){return this.post('/api/auth/login',{username:u,password:pw});},
+  getProducts(){return this.get('/api/products?active=all&limit=500');},
+  createProduct(d){return this.post('/api/products',d);},
+  updateProduct(id,d){return this.put('/api/products/'+id,d);},
+  deleteProduct(id){return this.del('/api/products/'+id);},
+  createOrder(d){return this.post('/api/orders',d);},
+  getOrders(){return this.get('/api/orders?limit=200');},
+  updateOrderStatus(id,s){return this.patch('/api/orders/'+id,{status:s});},
+};
+let API_ONLINE=false;
+async function checkApiOnline(){
+  const r=await Api.get('/health');
+  API_ONLINE=r.ok;
+  return API_ONLINE;
+}
+const CAT_LABELS={frukty:'Фрукти',ovochi:'Овочі',zelen:'Зелень',gryby:'Гриби',yaytsia:'Яйця',solodke:'Солодке'};
+const ICO_MAP={frukty:'If',ovochi:'Iv',zelen:'Ih',gryby:'Im',yaytsia:'Ie',solodke:'Ib'};
+function apiProdToFront(ap){
+  return{id:'api_'+ap.id,_apiId:ap.id,name:ap.name,price:ap.price,
+    unit:ap.unit||'кг',min:ap.min_order||'',cat:ap.category,
+    catName:CAT_LABELS[ap.category]||ap.category,ico:ICO_MAP[ap.category]||'Iv',
+    inStock:ap.is_active,desc:ap.description||'',img:ap.image_url||null};
+}
+function frontProdToApi(p){
+  return{name:p.name,category:p.cat,price:parseFloat(p.price)||0,
+    unit:p.unit||'кг',min_order:p.min||null,
+    description:p.desc||null,image_url:p.img||null,is_active:p.inStock!==false};
+}
+async function loadProductsFromApi(){
+  const r=await Api.getProducts();
+  if(!r.ok||!r.data?.items?.length)return false;
+  Object.keys(P).forEach(k=>{P[k]=[];});
+  r.data.items.forEach(ap=>{
+    const cat=ap.category;
+    if(!P[cat])P[cat]=[];
+    P[cat].push(apiProdToFront(ap));
+  });
+  ALL.length=0;
+  for(const c of CAT_LIST){(P[c.key]||[]).forEach(x=>ALL.push(x));}
+  return true;
+}
 // ── DATA ──
 const IMGS={
   fr_avocado:'https://images.unsplash.com/photo-1523049673857-eb18f1d7b578?w=300&q=70',
@@ -1820,19 +1888,28 @@ function placeOrder(){
     payment:pay==='cash'?'Готівка':'Переказ на карту',
   };
 
-  // save to user account
+  const fullName=(order.customer?.name)||'Анонім';
+  const finish=()=>{
+    toast('✅ Замовлення прийнято! Очікуйте повідомлення.');
+    cart=[];window.cart=cart;saveCart();updCart();reRenderProductCards();
+    setTimeout(()=>pg('home'),1800);
+  };
   if(user){user.orders=user.orders||[];user.orders.unshift(order);saveUser();}
-
-  // save to global admin orders store
-  try{
-    let adminOrders=JSON.parse(localStorage.getItem('fg_admin_orders')||'[]');
-    adminOrders.unshift(order);
-    localStorage.setItem('fg_admin_orders',JSON.stringify(adminOrders));
-  }catch(e){}
-
-  toast('✅ Замовлення прийнято! Очікуйте повідомлення.');
-  cart=[];window.cart=cart;saveCart();updCart();reRenderProductCards();
-  setTimeout(()=>pg('home'),1800);
+  try{let a=JSON.parse(localStorage.getItem('fg_admin_orders')||'[]');a.unshift(order);localStorage.setItem('fg_admin_orders',JSON.stringify(a));}catch(e){}
+  if(API_ONLINE&&cart.every(i=>i._apiId)){
+    Api.createOrder({
+      customer_name:order.customer?.name||'Анонім',
+      customer_phone:order.customer?.phone||'',
+      customer_tg:order.customer?.tg||null,
+      delivery_type:order.delivery==='Кур’єр'?'courier':'np',
+      delivery_addr:order.customer?.addr||'',
+      payment_method:order.payment==='Готівка'?'cash':'card',
+      items:cart.map(i=>({product_id:i._apiId,quantity:i.qty}))
+    }).then(r=>{
+      if(!r.ok&&r.status===400&&r.error){toast('⚠️ '+r.error);return;}
+      finish();
+    }).catch(finish);
+  }else{finish();}
 }
 
 function goCheckout(){
@@ -1928,14 +2005,16 @@ function doAdminLogin(){
   const l=document.getElementById('adm-l').value.trim();
   const p=document.getElementById('adm-p').value;
   document.getElementById('adm-err').style.display='none';
-  if(l===ADMIN_LOGIN&&p===ADMIN_PASS){
-    adminAuthed=true;
-    closeAdmin();
-    showAdminPanel();
-  } else {
-    document.getElementById('adm-err').style.display='block';
-    document.getElementById('adm-p').value='';
-  }
+  const loginLocal=()=>{
+    if(l===ADMIN_LOGIN&&p===ADMIN_PASS){adminAuthed=true;closeAdmin();showAdminPanel();}
+    else{document.getElementById('adm-err').style.display='block';document.getElementById('adm-p').value='';}
+  };
+  if(API_ONLINE){
+    Api.login(l,p).then(r=>{
+      if(r.ok&&r.data?.token){Api.setToken(r.data.token);adminAuthed=true;closeAdmin();showAdminPanel();}
+      else loginLocal();
+    }).catch(loginLocal);
+  }else{loginLocal();}
 }
 // ── ADMIN KEYBOARD ──
 document.addEventListener('keydown',function(e){
@@ -2057,16 +2136,24 @@ function toggleStock(id,checked){
   }
   applyF();
   renderHomePopular();
+  const apiId=found.p._apiId;
+  if(API_ONLINE&&Api.getToken()&&apiId){
+    Api.updateProduct(apiId,{is_active:checked}).catch(()=>{});
+  }
 }
 function deleteProd(id){
   if(!confirm('Видалити товар?'))return;
+  let apiId=null;
   for(const c of CAT_LIST){
     const arr=adminProducts[c.key]||[];
     const idx=arr.findIndex(x=>x.id===id);
-    if(idx!==-1){arr.splice(idx,1);break;}
+    if(idx!==-1){apiId=arr[idx]._apiId;arr.splice(idx,1);break;}
   }
   renderAdminTable(document.getElementById('adm-cat-filter').value);
   toast('Товар видалено');
+  if(API_ONLINE&&Api.getToken()&&apiId){
+    Api.deleteProduct(apiId).catch(()=>{});
+  }
 }
 function saveOneProduct(id){
   const found=findProd(id);
@@ -2108,8 +2195,20 @@ function saveAllAdmin(){
   renderHomePopular();
   applyF();
   buildCatalogPanels();
-  toast('✅ Всі зміни збережено!');
-  closeAdminPanel();
+  if(API_ONLINE&&Api.getToken()){
+    const all=[];
+    CAT_LIST.forEach(c=>{(adminProducts[c.key]||[]).forEach(p=>{if(p._apiId)all.push(p);});});
+    if(!all.length){toast('✅ Збережено!');closeAdminPanel();return;}
+    let done=0;
+    all.forEach(p=>{
+      Api.updateProduct(p._apiId,frontProdToApi(p)).finally(()=>{
+        if(++done===all.length){toast('✅ Всі зміни збережено в БД!');closeAdminPanel();}
+      });
+    });
+  }else{
+    toast('✅ Всі зміни збережено!');
+    closeAdminPanel();
+  }
 }
 
 function addNewProduct(){
@@ -2198,24 +2297,36 @@ function saveCreateForm(){
         }
       }
     }
-    toast(`✅ "${name}" оновлено`);
+    const apiId=found.p._apiId;
+    if(API_ONLINE&&Api.getToken()&&apiId){
+      Api.updateProduct(apiId,{name,category:cat,price,unit,min_order:min||null,is_active:inStock})
+        .then(r=>toast(r.ok?`✅ "${name}" збережено в БД`:`✅ "${name}" оновлено`))
+        .catch(()=>toast(`✅ "${name}" оновлено`));
+    }else{toast(`✅ "${name}" оновлено`);}
   } else {
-    // create new
     const newId='prod_'+Date.now();
     const newP={id:newId,name,price,unit,min,cat,catName:catLabel,ico:icoMap[cat]||'Iv',inStock};
     if(!adminProducts[cat])adminProducts[cat]=[];
+    if(API_ONLINE&&Api.getToken()){
+      Api.createProduct({name,category:cat,price,unit,min_order:min||null,is_active:inStock}).then(r=>{
+        if(r.ok&&r.data){newP._apiId=r.data.id;newP.id='api_'+r.data.id;}
+        adminProducts[cat].unshift(newP);
+        toast(`✅ "${name}" додано в БД`);
+        closeCreateForm();
+        const filter=document.getElementById('adm-cat-filter');filter.value=cat;renderAdminTable(cat);
+        const statsEl=document.getElementById('adm-stats');
+        if(statsEl){const total=CAT_LIST.reduce((s,c)=>s+(adminProducts[c.key]||[]).length,0);statsEl.innerHTML=CAT_LIST.map(c=>`<div class="adm-stat"><strong>${(adminProducts[c.key]||[]).length}</strong>${c.label}</div>`).join('')+`<div class="adm-stat" style="margin-left:auto"><strong style="color:var(--txt)">${total}</strong>Всього</div>`;}
+      }).catch(()=>{adminProducts[cat].unshift(newP);toast(`✅ "${name}" додано`);closeCreateForm();const filter=document.getElementById('adm-cat-filter');filter.value=cat;renderAdminTable(cat);});
+      return;
+    }
     adminProducts[cat].unshift(newP);
     toast(`✅ "${name}" додано`);
   }
 
   closeCreateForm();
-
-  // update filter to show the saved category
   const filter=document.getElementById('adm-cat-filter');
   filter.value=cat;
   renderAdminTable(cat);
-
-  // update stats
   const statsEl=document.getElementById('adm-stats');
   if(statsEl){
     const total=CAT_LIST.reduce((s,c)=>s+(adminProducts[c.key]||[]).length,0);
@@ -2229,7 +2340,25 @@ let allAdminOrders=[];
 let selectedClientKey=null;
 
 function loadAdminOrders(){
-  try{allAdminOrders=JSON.parse(localStorage.getItem('fg_admin_orders')||'[]');}catch(e){allAdminOrders=[];}
+  if(API_ONLINE&&Api.getToken()){
+    Api.getOrders().then(r=>{
+      if(r.ok&&r.data?.items){
+        allAdminOrders=r.data.items.map(o=>({
+          id:o.order_number||('#'+o.id),_apiId:o.id,
+          date:new Date(o.created_at||Date.now()).toLocaleString('uk-UA'),
+          timestamp:new Date(o.created_at||Date.now()).getTime(),
+          items:(o.items||[]).map(i=>({name:i.product_name,qty:i.quantity,price:i.price,unit:i.unit})),
+          total:o.total_amount||0,status:o.status||'new',
+          customer:{name:o.customer_name||'',phone:o.customer_phone||'',tg:o.customer_tg||'',addr:o.delivery_addr||''},
+          delivery:o.delivery_type==='courier'?'Кур’єр':'Нова Пошта',
+          payment:o.payment_method==='cash'?'Готівка':'Оплата онлайн',
+        }));
+        renderClientList('');updateOrdersBadge();
+      }else{try{allAdminOrders=JSON.parse(localStorage.getItem('fg_admin_orders')||'[]');}catch(e){allAdminOrders=[];}}
+    }).catch(()=>{try{allAdminOrders=JSON.parse(localStorage.getItem('fg_admin_orders')||'[]');}catch(e){allAdminOrders=[];}});
+  }else{
+    try{allAdminOrders=JSON.parse(localStorage.getItem('fg_admin_orders')||'[]');}catch(e){allAdminOrders=[];}
+  }
 }
 
 function switchAdmTab(tab){
@@ -2540,10 +2669,21 @@ function deleteOrder(orderId, clientKey){
     localStorage.setItem('fg_admin_orders', JSON.stringify(fakeOrders));
   }catch(e){}
 })();
-renderHomePopular();
-updCart();
-buildReviews();
-applyF();
+(async function init(){
+  renderHomePopular();
+  updCart();
+  buildReviews();
+  applyF();
+  const online=await checkApiOnline();
+  if(online){
+    const loaded=await loadProductsFromApi();
+    if(loaded){
+      renderHomePopular();
+      applyF();
+      if(typeof buildCatalogPanels==='function')buildCatalogPanels();
+    }
+  }
+})();
 </script>
 <!-- ══ ADMIN LOGIN MODAL ══ -->
 <div class="adm-login-modal" id="adm-login-modal">
