@@ -2435,14 +2435,21 @@ function switchImgTab(tab){
     panelUrl.style.display='none';
   }
 }
+let _admImgUrl=null; // глобальна змінна — надійне сховище URL картинки
+
 function previewAdmImg(url){
+  _admImgUrl=url||null; // завжди синхронізуємо
   const prev=document.getElementById('afc-img-preview');
   const img=document.getElementById('afc-img-preview-img');
+  const fld=document.getElementById('afc-img');
   if(url){
     img.src=url;
     prev.style.display='block';
+    if(fld&&fld.value!==url)fld.value=url; // синхронізуємо поле
   }else{
+    _admImgUrl=null;
     prev.style.display='none';
+    if(fld)fld.value='';
   }
 }
 async function uploadAdmImg(input){
@@ -2508,6 +2515,7 @@ async function uploadAdmImg(input){
   }
 }
 function clearAdmImg(){
+  _admImgUrl=null;
   const urlFld=document.getElementById('afc-img');
   const fileFld=document.getElementById('afc-img-file');
   const filename=document.getElementById('afc-img-filename');
@@ -2544,6 +2552,7 @@ function openCreateForm(editId){
     stockFld.checked=p.inStock!==false;
     if(imgFld){
       // Скидаємо перед заповненням
+      _admImgUrl=null;
       previewAdmImg('');
       imgFld.value='';
       switchImgTab('url');
@@ -2603,8 +2612,8 @@ function saveCreateForm(){
   const price=parseFloat(document.getElementById('afc-price').value)||0;
   const unit=document.getElementById('afc-unit').value.trim()||'кг';
   const min=document.getElementById('afc-min').value.trim();
-  const imgRaw=(document.getElementById('afc-img')?.value||'').trim();
-  // null = не змінювати; '' = очистити (тільки якщо натиснули ✕); реальний URL = зберегти
+  // Читаємо з надійного сховища + fallback на DOM поле
+  const imgRaw=_admImgUrl||(document.getElementById('afc-img')?.value||'').trim()||null;
   const imgUrl=imgRaw||null;
   const inStock=document.getElementById('afc-stock').checked;
 
@@ -3222,7 +3231,7 @@ function deleteOrder(orderId, clientKey){
           </div>
           <!-- Панель URL -->
           <div id="afc-img-panel-url">
-            <input type="url" id="afc-img" placeholder="https://images.unsplash.com/..."
+            <input type="text" id="afc-img" placeholder="https://images.unsplash.com/..."
               oninput="previewAdmImg(this.value)"
               style="width:100%;border:1.5px solid var(--border);border-radius:var(--rxs);padding:10px 12px;font:14px var(--fb);color:var(--txt);outline:none"
               onfocus="this.style.borderColor='var(--g2)'" onblur="this.style.borderColor='var(--border)'"/>
