@@ -2359,8 +2359,19 @@ function openCreateForm(editId){
     stockFld.checked=p.inStock!==false;
     if(imgFld){
       // Показуємо URL якщо це http, інакше — порожньо (ключ IMGS не редагується)
-      imgFld.value=(p.img&&p.img.startsWith('http'))?p.img:'';
-      previewAdmImg(imgFld.value);
+      // Резолвимо URL: якщо http — беремо напряму, якщо ключ IMGS — конвертуємо, інакше gImg
+      let resolvedImg='';
+      if(p.img&&p.img.startsWith('http')){
+        resolvedImg=p.img;
+      }else if(p.img&&IMGS[p.img]){
+        resolvedImg=IMGS[p.img];
+      }else{
+        // gImg повертає реальний URL — використовуємо його як підказку
+        const autoImg=gImg(p);
+        resolvedImg=autoImg&&autoImg.startsWith('http')?autoImg:'';
+      }
+      imgFld.value=resolvedImg;
+      previewAdmImg(resolvedImg);
     }
     form.dataset.editId=editId;
   } else {
