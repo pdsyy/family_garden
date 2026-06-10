@@ -2674,6 +2674,7 @@ function saveCreateForm(){
     ALL.length=0;
     CAT_LIST.forEach(cl=>{(P[cl.key]||[]).forEach(x=>ALL.push(x));});
 
+    const wasCleared=_admImgCleared; // зберігаємо ДО скидання
     _admImgCleared=false;
     closeCreateForm();
     renderAdminTable(cat);
@@ -2681,7 +2682,7 @@ function saveCreateForm(){
     const apiId=found.p._apiId;
     if(API_ONLINE&&Api.getToken()&&apiId){
       Api.updateProduct(apiId,Object.assign({name,category:cat,price,unit,min_order:min||null,is_active:inStock},
-          (_admImgCleared||imgUrl!==null)?{image_url:imgUrl||null}:{}))
+          (wasCleared||imgUrl!==null)?{image_url:wasCleared?null:imgUrl}:{}))
         .then(r=>toast(r.ok?`✅ "${name}" збережено в БД`:`✅ "${name}" оновлено`))
         .catch(()=>toast(`✅ "${name}" оновлено`));
     }else{toast(`✅ "${name}" оновлено`);}
