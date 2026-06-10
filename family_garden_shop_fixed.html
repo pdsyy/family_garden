@@ -2662,7 +2662,17 @@ function saveCreateForm(){
       }
     }
     // НЕ мутуємо P тут — тільки adminProducts
-    // P оновиться тільки при saveAllAdmin
+    // Одразу оновлюємо P і ALL щоб каталог показував актуальні дані
+    for(const cl of CAT_LIST){
+      const arr=P[cl.key]||[];
+      const idx=arr.findIndex(x=>x.id===editId);
+      if(idx!==-1){
+        Object.assign(arr[idx],found.p); // синхронізуємо з adminProducts
+        break;
+      }
+    }
+    ALL.length=0;
+    CAT_LIST.forEach(cl=>{(P[cl.key]||[]).forEach(x=>ALL.push(x));});
 
     _admImgCleared=false;
     closeCreateForm();
