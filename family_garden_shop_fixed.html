@@ -1544,14 +1544,34 @@ function cartDec(pid){
   if(typeof reRenderProductCards==='function')reRenderProductCards();
 }
 
-// Refresh visible product cards to reflect current cart state
+// Оновлює тільки кнопки карток — без перезавантаження картинок
 function reRenderProductCards(){
-  // Re-render home grid
-  const homeGrid=document.getElementById('pgrid-home');
-  if(homeGrid && typeof renderHomePopular==='function'){renderHomePopular();}
-  // Re-render catalog grid
-  const catGrid=document.getElementById('pgrid-cat');
-  if(catGrid && typeof applyF==='function'){applyF();}
+  document.querySelectorAll('.pcard[data-pid]').forEach(card=>{
+    const pid=card.getAttribute('data-pid');
+    const inCart=(window.cart||[]).find(x=>x.id===pid);
+    const qty=inCart?inCart.qty:0;
+    const p=ALL.find(x=>x.id===pid);
+    if(!p)return;
+    const footer=card.querySelector('.pfooter');
+    if(!footer)return;
+    // Видаляємо старий контрол (кнопку або лічильник)
+    const oldCtrl=footer.querySelector('.acbtn,.acounter');
+    if(oldCtrl)oldCtrl.remove();
+    // Створюємо новий
+    const ctrl=document.createElement('div');
+    if(qty>0){
+      ctrl.className='acounter';
+      ctrl.setAttribute('onclick','event.stopPropagation()');
+      ctrl.setAttribute('data-pid',pid);
+      ctrl.innerHTML=`<button onclick="cartDec('${pid}')" aria-label="Зменшити">−</button><span class="acn">${qty}</span><button onclick="addCart(${eJ(p)},1)" aria-label="Збільшити">+</button>`;
+    }else{
+      ctrl.className='acbtn';
+      ctrl.setAttribute('onclick',`event.stopPropagation();addCart(${eJ(p)},1)`);
+      ctrl.setAttribute('aria-label','Додати в кошик');
+      ctrl.textContent='+';
+    }
+    footer.appendChild(ctrl);
+  });
 }
 
 // ── MEGA MENUS ──
