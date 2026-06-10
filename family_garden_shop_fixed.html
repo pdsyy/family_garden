@@ -1921,7 +1921,6 @@ function placeOrder(){
   const dlv=document.querySelector('[name="dlv"]:checked')?.value||'courier';
   const pay=document.querySelector('[name="pay"]:checked')?.value||'cash';
 
-  // Validation
   if(!name){toast('⚠️ Вкажіть ім\'я');document.getElementById('co-nm')?.focus();return;}
   if(!phone){toast('⚠️ Вкажіть телефон');document.getElementById('co-ph')?.focus();return;}
   if(!/^\+?\d[\d\s\-()]{8,}$/.test(phone)){toast('⚠️ Невірний формат телефону');document.getElementById('co-ph')?.focus();return;}
@@ -1936,43 +1935,64 @@ function placeOrder(){
     const npCity=(document.getElementById('co-np-city')?.value||'').trim();
     const npNum=(document.getElementById('co-np-num')?.value||'').trim();
     if(!npCity||!npNum){toast('⚠️ Заповніть місто та номер відділення');return;}
-    addr=`${npCity}, відділення №${npNum}`;
+    addr=npCity+', відділення №'+npNum;
   }
 
-  const order={
+  const fullName=(name+' '+lname).trim()||'Анонім';
+  // Знімок кошика ДО очищення
+  const cartSnapshot=[...cart];
+  const total=cartTot();
+
+  const localOrder={
     id:'#'+Math.floor(Math.random()*90000+10000),
     date:new Date().toLocaleString('uk-UA'),
     timestamp:Date.now(),
-    items:[...cart],
-    total:cartTot(),
+    items:cartSnapshot.map(i=>({name:i.name,qty:i.qty,price:i.price,unit:i.unit})),
+    total:total,
     status:'new',
-    customer:{name:(name+' '+lname).trim()||'Анонім',phone,tg,addr},
-    delivery:dlv==='courier'?'Кур\'єр':'Нова Пошта',
-    payment:pay==='cash'?'Готівка':'Переказ на карту',
+    customer:{name:fullName,phone:phone,tg:tg,addr:addr},
+    delivery:dlv==='courier'?'Кур\u2019єр':'Нова Пошта',
+    payment:pay==='cash'?'Готівка':'Оплата онлайн',
   };
 
-  const fullName=(order.customer?.name)||'Анонім';
   const finish=()=>{
+    // Зберігаємо в localStorage для адмінки
+    if(user){user.orders=user.orders||[];user.orders.unshift(localOrder);saveUser();}
+    try{
+      let a=JSON.parse(localStorage.getItem('fg_admin_orders')||'[]');
+      a.unshift(localOrder);
+      localStorage.setItem('fg_admin_orders',JSON.stringify(a));
+    }catch(e){}
     toast('✅ Замовлення прийнято! Очікуйте повідомлення.');
     cart=[];window.cart=cart;saveCart();updCart();reRenderProductCards();
     setTimeout(()=>pg('home'),1800);
   };
-  if(user){user.orders=user.orders||[];user.orders.unshift(order);saveUser();}
-  try{let a=JSON.parse(localStorage.getItem('fg_admin_orders')||'[]');a.unshift(order);localStorage.setItem('fg_admin_orders',JSON.stringify(a));}catch(e){}
-  if(API_ONLINE&&cart.every(i=>i._apiId)){
+
+  // Відправляємо на сервер якщо API доступний і всі товари з БД
+  const apiItems=cartSnapshot.filter(i=>i._apiId);
+  if(API_ONLINE&&apiItems.length===cartSnapshot.length){
     Api.createOrder({
-      customer_name:order.customer?.name||'Анонім',
-      customer_phone:order.customer?.phone||'',
-      customer_tg:order.customer?.tg||null,
-      delivery_type:order.delivery==='Кур’єр'?'courier':'np',
-      delivery_addr:order.customer?.addr||'',
-      payment_method:order.payment==='Готівка'?'cash':'card',
-      items:cart.map(i=>({product_id:i._apiId,quantity:i.qty}))
+      customer_name:fullName,
+      customer_phone:phone,
+      customer_tg:tg||null,
+      delivery_type:dlv,
+      delivery_addr:addr,
+      payment_method:pay,
+      items:cartSnapshot.map(i=>({product_id:i._apiId,quantity:i.qty}))
     }).then(r=>{
-      if(!r.ok&&r.status===400&&r.error){toast('⚠️ '+r.error);return;}
+      if(!r.ok){
+        if(r.status===400&&r.error){toast('⚠️ '+r.error);return;}
+        console.warn('[API] createOrder failed:', r.error);
+      }
       finish();
-    }).catch(finish);
-  }else{finish();}
+    }).catch(err=>{
+      console.warn('[API] createOrder error:', err);
+      finish();
+    });
+  }else{
+    // Офлайн або захардкоджені товари
+    finish();
+  }
 }
 
 function goCheckout(){
@@ -2404,23 +2424,71 @@ let selectedClientKey=null;
 
 function loadAdminOrders(){
   if(API_ONLINE&&Api.getToken()){
+    // Завантажуємо замовлення з сервера (з позиціями)
     Api.getOrders().then(r=>{
-      if(r.ok&&r.data?.items){
-        allAdminOrders=r.data.items.map(o=>({
-          id:o.order_number||('#'+o.id),_apiId:o.id,
-          date:new Date(o.created_at||Date.now()).toLocaleString('uk-UA'),
-          timestamp:new Date(o.created_at||Date.now()).getTime(),
-          items:(o.items||[]).map(i=>({name:i.product_name,qty:i.quantity,price:i.price,unit:i.unit})),
-          total:o.total_amount||0,status:o.status||'new',
-          customer:{name:o.customer_name||'',phone:o.customer_phone||'',tg:o.customer_tg||'',addr:o.delivery_addr||''},
-          delivery:o.delivery_type==='courier'?'Кур’єр':'Нова Пошта',
-          payment:o.payment_method==='cash'?'Готівка':'Оплата онлайн',
-        }));
-        renderClientList('');updateOrdersBadge();
-      }else{try{allAdminOrders=JSON.parse(localStorage.getItem('fg_admin_orders')||'[]');}catch(e){allAdminOrders=[];}}
-    }).catch(()=>{try{allAdminOrders=JSON.parse(localStorage.getItem('fg_admin_orders')||'[]');}catch(e){allAdminOrders=[];}});
+      if(r.ok&&r.data?.items&&r.data.items.length>0){
+        // Для кожного замовлення завантажуємо позиції
+        const orders=r.data.items;
+        let loaded=0;
+        const results=[];
+        orders.forEach(o=>{
+          Api.get('/api/orders/'+o.id).then(detail=>{
+            const items=detail.ok&&detail.data?.items
+              ? detail.data.items.map(i=>({name:i.product_name,qty:i.quantity,price:i.price,unit:i.unit}))
+              : [];
+            results.push({
+              id:o.order_number||('#'+o.id),
+              _apiId:o.id,
+              date:new Date(o.created_at||Date.now()).toLocaleString('uk-UA'),
+              timestamp:new Date(o.created_at||Date.now()).getTime(),
+              items:items,
+              total:o.total_amount||0,
+              status:o.status||'new',
+              customer:{name:o.customer_name||'',phone:o.customer_phone||'',tg:o.customer_tg||'',addr:o.delivery_addr||''},
+              delivery:o.delivery_type==='courier'?'Кур’єр':'Нова Пошта',
+              payment:o.payment_method==='cash'?'Готівка':'Оплата онлайн',
+            });
+            if(++loaded===orders.length){
+              // Сортуємо по даті (нові спочатку)
+              results.sort((a,b)=>b.timestamp-a.timestamp);
+              allAdminOrders=results;
+              renderClientList('');
+              updateOrdersBadge();
+            }
+          }).catch(()=>{
+            results.push({
+              id:o.order_number||('#'+o.id),_apiId:o.id,
+              date:new Date(o.created_at||Date.now()).toLocaleString('uk-UA'),
+              timestamp:new Date(o.created_at||Date.now()).getTime(),
+              items:[],total:o.total_amount||0,status:o.status||'new',
+              customer:{name:o.customer_name||'',phone:o.customer_phone||'',tg:o.customer_tg||'',addr:o.delivery_addr||''},
+              delivery:o.delivery_type==='courier'?'Кур’єр':'Нова Пошта',
+              payment:o.payment_method==='cash'?'Готівка':'Оплата онлайн',
+            });
+            if(++loaded===orders.length){
+              results.sort((a,b)=>b.timestamp-a.timestamp);
+              allAdminOrders=results;
+              renderClientList('');
+              updateOrdersBadge();
+            }
+          });
+        });
+      }else{
+        // Сервер повернув порожній список — беремо з localStorage
+        try{allAdminOrders=JSON.parse(localStorage.getItem('fg_admin_orders')||'[]');}
+        catch(e){allAdminOrders=[];}
+        renderClientList('');
+        updateOrdersBadge();
+      }
+    }).catch(()=>{
+      try{allAdminOrders=JSON.parse(localStorage.getItem('fg_admin_orders')||'[]');}
+      catch(e){allAdminOrders=[];}
+      renderClientList('');
+      updateOrdersBadge();
+    });
   }else{
-    try{allAdminOrders=JSON.parse(localStorage.getItem('fg_admin_orders')||'[]');}catch(e){allAdminOrders=[];}
+    try{allAdminOrders=JSON.parse(localStorage.getItem('fg_admin_orders')||'[]');}
+    catch(e){allAdminOrders=[];}
   }
 }
 
