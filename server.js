@@ -17,7 +17,8 @@ const cors         = require('cors');
 const rLimit       = require('express-rate-limit');
 const path         = require('path');
 const authRoutes   = require('./routes/auth');
-const uploadRoutes = require('./routes/upload');
+const uploadRoutes   = require('./routes/upload');
+const customerRoutes = require('./routes/customers');
 const productRoutes = require('./routes/products');
 const orderRoutes  = require('./routes/orders');
 const errorHandler = require('./middleware/errorHandler');
@@ -58,7 +59,8 @@ app.get('/health', (req, res) =>
 
 /* ── API routes ── */
 app.use('/api/auth',     authRoutes);
-app.use('/api/upload',   uploadRoutes);
+app.use('/api/upload',    uploadRoutes);
+app.use('/api/customers', customerRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/orders',   orderRoutes);
 

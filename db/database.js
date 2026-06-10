@@ -84,6 +84,24 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS idx_order_items_order ON order_items(order_id);
 
+  /* Клієнти (покупці) */
+  CREATE TABLE IF NOT EXISTS customers (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    name          TEXT    NOT NULL,
+    phone         TEXT    NOT NULL UNIQUE,
+    email         TEXT    UNIQUE,
+    tg            TEXT,
+    addr          TEXT,
+    password_hash TEXT    NOT NULL,
+    created_at    TEXT    NOT NULL DEFAULT (datetime('now')),
+    updated_at    TEXT    NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_customers_phone ON customers(phone);
+
+  CREATE TRIGGER IF NOT EXISTS trg_customers_upd
+    AFTER UPDATE ON customers FOR EACH ROW
+    BEGIN UPDATE customers SET updated_at = datetime('now') WHERE id = OLD.id; END;
+
   /* Триггеры updated_at */
   CREATE TRIGGER IF NOT EXISTS trg_users_upd
     AFTER UPDATE ON users FOR EACH ROW

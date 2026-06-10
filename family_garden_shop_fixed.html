@@ -1216,6 +1216,13 @@ const Api={
   createOrder(d){return this.post('/api/orders',d);},
   getOrders(){return this.get('/api/orders?limit=200');},
   updateOrderStatus(id,s){return this.patch('/api/orders/'+id,{status:s});},
+  // Клієнти
+  customerRegister(d){return this.post('/api/customers/register',d);},
+  customerLogin(d){return this.post('/api/customers/login',d);},
+  customerMe(){return this.get('/api/customers/me');},
+  customerUpdate(d){return this.put('/api/customers/me',d);},
+  customerOrders(){return this.get('/api/customers/me/orders');},
+  customerChangePw(d){return this.post('/api/customers/change-password',d);},
 };
 let API_ONLINE=false;
 async function checkApiOnline(){
@@ -2053,11 +2060,38 @@ function renderAccount(){
     <button class="logout-btn" onclick="logout()">Вийти з акаунту</button>`;
 }
 function acTab(t){document.querySelectorAll('.act-tab').forEach(b=>b.classList.remove('act'));document.querySelectorAll('.ac-panel').forEach(p=>p.classList.remove('act'));document.querySelector(`.act-tab:nth-child(${t==='profile'?1:2})`).classList.add('act');document.getElementById('acp-'+t).classList.add('act');}
-function saveProfile(){user.name=document.getElementById('pr-nm').value;user.phone=document.getElementById('pr-ph').value;user.tg=document.getElementById('pr-tg').value;user.addr=document.getElementById('pr-addr').value;saveUser();toast('✅ Дані збережено');}
-function saveUser(){try{localStorage.setItem('fg_user',JSON.stringify(user));}catch(e){}updUserBtn();}
+function saveProfile(){
+  user.name=document.getElementById('pr-nm').value;
+  user.phone=document.getElementById('pr-ph').value;
+  user.tg=document.getElementById('pr-tg').value||'';
+  user.addr=document.getElementById('pr-addr').value||'';
+  saveUser();
+  const tok=getCustToken();
+  if(API_ONLINE&&tok){
+    Api.setToken(tok);
+    Api.customerUpdate({name:user.name,tg:user.tg,addr:user.addr}).then(r=>{
+      toast(r.ok?'✅ Дані збережено':'✅ Дані збережено локально');
+    }).catch(()=>toast('✅ Дані збережено'));
+  }else{toast('✅ Дані збережено');}
+}
+function saveUser(){
+  if(!user)return;
+  try{localStorage.setItem('fg_user',JSON.stringify(user));}catch(e){}
+  updUserBtn();
+}
+function saveCustToken(tok){try{sessionStorage.setItem('fg_cust_jwt',tok);}catch(e){}}
+function getCustToken(){try{return sessionStorage.getItem('fg_cust_jwt');}catch(e){return null;}}
+function clearCustToken(){try{sessionStorage.removeItem('fg_cust_jwt');}catch(e){}}
 function updUserBtn(){const btn=document.getElementById('user-btn');if(user&&btn)btn.style.background='var(--gpal)';else if(btn)btn.style.background='';}
 updUserBtn();
-function logout(){user=null;try{localStorage.removeItem('fg_user');}catch(e){}updUserBtn();pg('home');toast('Ви вийшли з акаунту');}
+function logout(){
+  user=null;
+  clearCustToken();
+  try{localStorage.removeItem('fg_user');}catch(e){}
+  updUserBtn();
+  pg('home');
+  toast('Ви вийшли з акаунту');
+}
 
 // ── MODALS ──
 function openM(id){document.getElementById(id).classList.add('open');document.body.style.overflow='hidden';}
@@ -2067,31 +2101,80 @@ document.querySelectorAll('.modal-ov,.pop-ov').forEach(el=>{el.addEventListener(
 // ── AUTH ──
 function authTab(t){document.querySelectorAll('.auth-tab').forEach(b=>b.classList.remove('act'));document.querySelectorAll('.auth-panel').forEach(p=>p.classList.remove('act'));document.querySelector(`.auth-tab:nth-child(${t==='login'?1:2})`).classList.add('act');document.getElementById('ap-'+t).classList.add('act');}
 function doLogin(){
-  const ph=document.getElementById('l-ph').value.trim(),ps=document.getElementById('l-ps').value;
+  const ph=document.getElementById('l-ph').value.trim();
+  const ps=document.getElementById('l-ps').value;
   if(!ph||!ps){toast('⚠️ Заповніть всі поля');return;}
+  if(API_ONLINE){
+    Api.customerLogin({phone:ph,password:ps}).then(r=>{
+      if(r.ok&&r.data?.token){
+        saveCustToken(r.data.token);
+        user={...r.data.customer,orders:[]};
+        saveUser();
+        // Завантажуємо замовлення з сервера
+        Api._tok=r.data.token;
+        Api.get('/api/customers/me/orders').then(or=>{
+          if(or.ok&&or.data?.items){
+            user.orders=or.data.items.map(o=>({
+              id:o.order_number||('#'+o.id),_apiId:o.id,
+              date:new Date(o.created_at||Date.now()).toLocaleString('uk-UA'),
+              items:(o.items||[]).map(i=>({name:i.product_name,qty:i.quantity,price:i.price,unit:i.unit})),
+              total:o.total_amount||0,status:o.status||'new',
+            }));
+            saveUser();
+          }
+        });
+        closeM('auth-modal');renderAccount();pg('account');
+        toast('Вітаємо, '+user.name+'!');
+      }else{
+        toast('⚠️ '+(r.error||'Невірний номер або пароль'));
+      }
+    }).catch(()=>{
+      // Офлайн fallback
+      _loginLocal(ph,ps);
+    });
+  }else{
+    _loginLocal(ph,ps);
+  }
+}
+function _loginLocal(ph,ps){
   try{
     const stored=localStorage.getItem('fg_user');
     if(stored){
       const u=JSON.parse(stored);
-      if((u.phone===ph||u.email===ph)&&u.password===ps){
+      if((u.phone===ph)&&u.password===ps){
         user=u;saveUser();closeM('auth-modal');renderAccount();pg('account');
         toast('Вітаємо, '+user.name+'!');return;
-      } else {
-        // Акаунт є але пароль невірний
-        toast('⚠️ Невірний пароль');return;
-      }
+      }else{toast('⚠️ Невірний пароль');return;}
     }
   }catch(e){}
-  // Акаунту немає — пропонуємо зареєструватись
   toast('⚠️ Акаунт не знайдено. Зареєструйтесь');
   authTab('register');
 }
 function doRegister(){
-  const nm=document.getElementById('r-nm').value.trim(),ph=document.getElementById('r-ph').value.trim(),ps=document.getElementById('r-ps').value;
+  const nm=document.getElementById('r-nm').value.trim();
+  const ph=document.getElementById('r-ph').value.trim();
+  const ps=document.getElementById('r-ps').value;
   if(!nm||!ph||!ps){toast('⚠️ Заповніть всі поля');return;}
   if(ps.length<6){toast('⚠️ Пароль мінімум 6 символів');return;}
-  user={name:nm,phone:ph,tg:'',addr:'',password:ps,orders:[]};
-  saveUser();closeM('auth-modal');renderAccount();pg('account');toast('Вітаємо, '+nm+'!');
+  if(API_ONLINE){
+    Api.customerRegister({name:nm,phone:ph,password:ps}).then(r=>{
+      if(r.ok&&r.data?.token){
+        saveCustToken(r.data.token);
+        user={...r.data.customer,orders:[]};
+        saveUser();closeM('auth-modal');renderAccount();pg('account');
+        toast('Вітаємо, '+nm+'!');
+      }else{
+        toast('⚠️ '+(r.error||'Помилка реєстрації'));
+      }
+    }).catch(()=>{
+      // Офлайн fallback
+      user={name:nm,phone:ph,tg:'',addr:'',password:ps,orders:[]};
+      saveUser();closeM('auth-modal');renderAccount();pg('account');toast('Вітаємо, '+nm+'!');
+    });
+  }else{
+    user={name:nm,phone:ph,tg:'',addr:'',password:ps,orders:[]};
+    saveUser();closeM('auth-modal');renderAccount();pg('account');toast('Вітаємо, '+nm+'!');
+  }
 }
 
 // ── TOAST ──
@@ -2999,6 +3082,15 @@ function deleteOrder(orderId, clientKey){
   const online=await checkApiOnline();
   console.log('[API] server online:', online);
   if(online){
+    // Відновлюємо сесію клієнта якщо є токен
+    const cTok=getCustToken();
+    if(cTok&&user){
+      Api.setToken(cTok);
+      Api.customerMe().then(r=>{
+        if(r.ok&&r.data){user={...user,...r.data};saveUser();updUserBtn();}
+        else clearCustToken();
+      }).catch(()=>{});
+    }
     const loaded=await loadProductsFromApi();
     console.log('[API] products loaded from DB:', loaded);
     if(loaded){
