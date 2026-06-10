@@ -1364,10 +1364,10 @@ const LOCAL_IMGS={
 function gImg(p){
   // 1. LOCAL_IMGS по ID (base64, для захардкоджених)
   if(LOCAL_IMGS[p.id])return LOCAL_IMGS[p.id];
-  // 2. p.img — або ключ IMGS, або повний URL з БД
+  // 2. p.img — або ключ IMGS, або URL з БД (http, /uploads/, data:)
   if(p.img){
-    if(IMGS[p.img])return IMGS[p.img];      // ключ типу 'fr_banan'
-    if(p.img.startsWith('http'))return p.img; // повний URL
+    if(IMGS[p.img])return IMGS[p.img];
+    if(p.img.startsWith('http')||p.img.startsWith('/')||p.img.startsWith('data:'))return p.img;
   }
   // 4. Пошук по назві товару — для товарів з БД без картинки
   const name=(p.name||'').toLowerCase();
@@ -2377,18 +2377,37 @@ async function uploadAdmImg(input){
     });
     const data=await res.json();
     if(res.ok&&data.url){
-      // Зберігаємо серверний URL в поле
+      // Будуємо повний URL якщо сервер повернув відносний /uploads/...
+      const fullUrl=data.url.startsWith('http')?data.url:(window.location.origin+data.url);
       const urlFld=document.getElementById('afc-img');
-      if(urlFld){urlFld.value=data.url;previewAdmImg(data.url);}
+      if(urlFld){urlFld.value=fullUrl;previewAdmImg(fullUrl);}
       if(filenameEl)filenameEl.textContent=file.name;
+      // Перемикаємось на URL вкладку щоб URL був видний
+      switchImgTab('url');
       toast('✅ Картинку завантажено');
     }else{
-      // Сервер не підтримує — залишаємо base64
-      if(filenameEl)filenameEl.textContent=file.name+'  (локально)';
-      toast('⚠️ Збережено локально');
+      // Сервер недоступний — зберігаємо base64 прямо в поле
+      const urlFld=document.getElementById('afc-img');
+      const base64=await new Promise(resolve=>{
+        const r2=new FileReader();
+        r2.onload=e=>resolve(e.target.result);
+        r2.readAsDataURL(file);
+      });
+      if(urlFld){urlFld.value=base64;previewAdmImg(base64);}
+      switchImgTab('url');
+      if(filenameEl)filenameEl.textContent=file.name+' (локально)';
+      toast('⚠️ Сервер недоступний — збережено як base64');
     }
   }catch(e){
-    // Офлайн — залишаємо base64 превʼю
+    // Помилка мережі — зберігаємо base64
+    const urlFld=document.getElementById('afc-img');
+    const base64=await new Promise(resolve=>{
+      const r2=new FileReader();
+      r2.onload=ev=>resolve(ev.target.result);
+      r2.readAsDataURL(file);
+    });
+    if(urlFld){urlFld.value=base64;previewAdmImg(base64);}
+    switchImgTab('url');
     if(filenameEl)filenameEl.textContent=file.name+' (офлайн)';
   }
 }
@@ -2432,19 +2451,26 @@ function openCreateForm(editId){
       previewAdmImg('');
       imgFld.value='';
       switchImgTab('url');
-      // Резолвимо URL: якщо http — беремо напряму, якщо ключ IMGS — конвертуємо, інакше gImg
+      // Показуємо тільки якщо є власний URL з БД (http)
+      // Ключі IMGS і автопідбір через gImg НЕ підставляємо — щоб не зберегти випадково
       let resolvedImg='';
-      if(p.img&&p.img.startsWith('http')){
+      if(p.img&&(p.img.startsWith('http')||p.img.startsWith('/')||p.img.startsWith('data:'))){
         resolvedImg=p.img;
-      }else if(p.img&&IMGS[p.img]){
-        resolvedImg=IMGS[p.img];
-      }else{
-        // gImg повертає реальний URL — використовуємо його як підказку
-        const autoImg=gImg(p);
-        resolvedImg=autoImg&&autoImg.startsWith('http')?autoImg:'';
+      }
+      // Для захардкоджених товарів (img = ключ типу 'fr_limon') — показуємо як підказку але не зберігаємо
+      let hintImg='';
+      if(!resolvedImg){
+        const auto=gImg(p);
+        if(auto&&auto.startsWith('http'))hintImg=auto;
       }
       imgFld.value=resolvedImg;
-      previewAdmImg(resolvedImg);
+      if(resolvedImg){
+        previewAdmImg(resolvedImg);
+      }else if(hintImg){
+        // Показуємо превʼю як підказку — поле порожнє, клікнути Зберегти не збереже цей URL
+        previewAdmImg(hintImg);
+        imgFld.placeholder='Зараз: автоматична картинка по назві товару';
+      }
     }
     form.dataset.editId=editId;
   } else {
@@ -2481,7 +2507,9 @@ function saveCreateForm(){
   const price=parseFloat(document.getElementById('afc-price').value)||0;
   const unit=document.getElementById('afc-unit').value.trim()||'кг';
   const min=document.getElementById('afc-min').value.trim();
-  const imgUrl=(document.getElementById('afc-img')?.value||'').trim()||null;
+  const imgRaw=(document.getElementById('afc-img')?.value||'').trim();
+  // null = не змінювати; '' = очистити (тільки якщо натиснули ✕); реальний URL = зберегти
+  const imgUrl=imgRaw||null;
   const inStock=document.getElementById('afc-stock').checked;
 
   if(!name){document.getElementById('afc-name').focus();return;}
@@ -2495,7 +2523,7 @@ function saveCreateForm(){
     const found=findProd(editId);
     if(found){
       const oldCat=found.p.cat;
-      Object.assign(found.p,{name,price,unit,min,cat,catName:catLabel,inStock,img:imgUrl||found.p.img});
+      Object.assign(found.p,{name,price,unit,min,cat,catName:catLabel,inStock,img:imgUrl!==null?imgUrl:found.p.img});
       // if cat changed: move in adminProducts
       if(oldCat!==cat){
         const oldArr=adminProducts[oldCat]||[];
@@ -2530,7 +2558,8 @@ function saveCreateForm(){
 
     const apiId=found.p._apiId;
     if(API_ONLINE&&Api.getToken()&&apiId){
-      Api.updateProduct(apiId,{name,category:cat,price,unit,min_order:min||null,image_url:imgUrl,is_active:inStock})
+      Api.updateProduct(apiId,Object.assign({name,category:cat,price,unit,min_order:min||null,is_active:inStock},
+          imgUrl!==null?{image_url:imgUrl}:{}))
         .then(r=>toast(r.ok?`✅ "${name}" збережено в БД`:`✅ "${name}" оновлено`))
         .catch(()=>toast(`✅ "${name}" оновлено`));
     }else{toast(`✅ "${name}" оновлено`);}
