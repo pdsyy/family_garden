@@ -1199,7 +1199,14 @@ const Api={
       const r=await fetch(path,opts);
       if(r.status===204)return{ok:true};
       const d=await r.json().catch(()=>({}));
-      if(!r.ok)return{ok:false,error:d.error||('Error '+r.status),status:r.status};
+      if(!r.ok){
+        // Якщо токен протермінований — скидаємо адмін сесію
+        if(r.status===401){
+          try{sessionStorage.removeItem('fg_admin_jwt');}catch(e){}
+          adminAuthed=false;
+        }
+        return{ok:false,error:d.error||('Error '+r.status),status:r.status};
+      }
       return{ok:true,data:d};
     }catch(e){return{ok:false,error:'No connection',network:true};}
   },
@@ -2188,9 +2195,21 @@ window.addEventListener('resize',updPh);updPh();
 const ADMIN_LOGIN='vikki99';
 const ADMIN_PASS='DIRTYvikki1488!';
 let adminAuthed=false;
+// Відновлюємо сесію адміна
+(function restoreAdminSession(){
+  try{
+    const tok=sessionStorage.getItem('fg_admin_jwt');
+    if(tok){Api.setToken(tok);adminAuthed=true;}
+  }catch(e){}
+})();
 let adminProducts=null; // working copy
 
 function openAdmin(){
+  // Перевіряємо збережений токен
+  if(!adminAuthed){
+    const tok=sessionStorage.getItem('fg_admin_jwt');
+    if(tok){Api.setToken(tok);adminAuthed=true;}
+  }
   if(adminAuthed){showAdminPanel();return;}
   document.getElementById('adm-login-modal').classList.add('open');
   document.body.style.overflow='hidden';
@@ -2210,8 +2229,11 @@ function doAdminLogin(){
   };
   if(API_ONLINE){
     Api.login(l,p).then(r=>{
-      if(r.ok&&r.data?.token){Api.setToken(r.data.token);adminAuthed=true;closeAdmin();showAdminPanel();}
-      else loginLocal();
+      if(r.ok&&r.data?.token){
+        Api.setToken(r.data.token);
+        try{sessionStorage.setItem('fg_admin_jwt',r.data.token);}catch(e){}
+        adminAuthed=true;closeAdmin();showAdminPanel();
+      }else loginLocal();
     }).catch(loginLocal);
   }else{loginLocal();}
 }
