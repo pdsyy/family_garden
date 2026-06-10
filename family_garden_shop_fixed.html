@@ -2410,7 +2410,9 @@ function openCreateForm(editId){
     minFld.value=p.min||'';
     stockFld.checked=p.inStock!==false;
     if(imgFld){
-      // Показуємо URL якщо це http, інакше — порожньо (ключ IMGS не редагується)
+      // Скидаємо превʼю перед заповненням
+      previewAdmImg('');
+      imgFld.value='';
       // Резолвимо URL: якщо http — беремо напряму, якщо ключ IMGS — конвертуємо, інакше gImg
       let resolvedImg='';
       if(p.img&&p.img.startsWith('http')){
@@ -2502,6 +2504,9 @@ function saveCreateForm(){
     });
     // Якщо картки немає в DOM (каталог не відкритий) — просто оновимо популярні
     renderHomePopular();
+
+    closeCreateForm();
+    renderAdminTable(cat);
 
     const apiId=found.p._apiId;
     if(API_ONLINE&&Api.getToken()&&apiId){
