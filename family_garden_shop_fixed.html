@@ -2322,6 +2322,23 @@ function addNewProduct(){
 function filterAdminCat(val){renderAdminTable(val);}
 
 // ── CREATE PRODUCT FORM ──
+function switchImgTab(tab){
+  const btnUrl=document.getElementById('afc-img-tab-url');
+  const btnFile=document.getElementById('afc-img-tab-file');
+  const panelUrl=document.getElementById('afc-img-panel-url');
+  const panelFile=document.getElementById('afc-img-panel-file');
+  if(tab==='url'){
+    btnUrl.style.background='var(--g2)';btnUrl.style.color='#fff';
+    btnFile.style.background='var(--surf)';btnFile.style.color='var(--muted)';
+    panelUrl.style.display='block';
+    panelFile.style.display='none';
+  }else{
+    btnFile.style.background='var(--g2)';btnFile.style.color='#fff';
+    btnUrl.style.background='var(--surf)';btnUrl.style.color='var(--muted)';
+    panelFile.style.display='block';
+    panelUrl.style.display='none';
+  }
+}
 function previewAdmImg(url){
   const prev=document.getElementById('afc-img-preview');
   const img=document.getElementById('afc-img-preview-img');
@@ -2381,8 +2398,9 @@ function clearAdmImg(){
   const filename=document.getElementById('afc-img-filename');
   if(urlFld)urlFld.value='';
   if(fileFld)fileFld.value='';
-  if(filename)filename.textContent='';
+  if(filename)filename.textContent='Натисніть або перетягніть файл';
   previewAdmImg('');
+  switchImgTab('url');
 }
 function openCreateForm(editId){
   const form=document.getElementById('adm-create-panel');
@@ -2410,9 +2428,10 @@ function openCreateForm(editId){
     minFld.value=p.min||'';
     stockFld.checked=p.inStock!==false;
     if(imgFld){
-      // Скидаємо превʼю перед заповненням
+      // Скидаємо перед заповненням
       previewAdmImg('');
       imgFld.value='';
+      switchImgTab('url');
       // Резолвимо URL: якщо http — беремо напряму, якщо ключ IMGS — конвертуємо, інакше gImg
       let resolvedImg='';
       if(p.img&&p.img.startsWith('http')){
@@ -2439,7 +2458,8 @@ function openCreateForm(editId){
     const fileFld2=document.getElementById('afc-img-file');
     const fname=document.getElementById('afc-img-filename');
     if(fileFld2)fileFld2.value='';
-    if(fname)fname.textContent='';
+    if(fname)fname.textContent='Натисніть або перетягніть файл';
+    switchImgTab('url');
     stockFld.checked=true;
     delete form.dataset.editId;
   }
@@ -3055,17 +3075,42 @@ function deleteOrder(orderId, clientKey){
         </div>
         <div class="adm-form-field">
           <label>Картинка</label>
-          <input type="url" id="afc-img" placeholder="https://... (вставте URL)" oninput="previewAdmImg(this.value)" style="margin-bottom:6px"/>
-          <div style="display:flex;align-items:center;gap:8px">
-            <label for="afc-img-file" style="display:inline-flex;align-items:center;gap:6px;background:var(--gpal);border:1.5px solid var(--gbor);color:var(--g2);border-radius:var(--rxs);padding:8px 14px;font:700 13px/1 var(--fb);cursor:pointer;transition:all .15s;white-space:nowrap" onmouseover="this.style.background='var(--gbor)'" onmouseout="this.style.background='var(--gpal)'">
-              📁 Завантажити з пристрою
-            </label>
-            <input type="file" id="afc-img-file" accept="image/*" style="display:none" onchange="uploadAdmImg(this)"/>
-            <span id="afc-img-filename" style="font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:140px"></span>
+          <!-- Перемикач URL / Файл -->
+          <div style="display:flex;gap:0;margin-bottom:10px;border:1.5px solid var(--border);border-radius:var(--rxs);overflow:hidden">
+            <button type="button" id="afc-img-tab-url" onclick="switchImgTab('url')"
+              style="flex:1;padding:8px;font:700 12px/1 var(--fb);border:none;cursor:pointer;background:var(--g2);color:#fff;transition:all .15s">
+              🔗 URL
+            </button>
+            <button type="button" id="afc-img-tab-file" onclick="switchImgTab('file')"
+              style="flex:1;padding:8px;font:700 12px/1 var(--fb);border:none;cursor:pointer;background:var(--surf);color:var(--muted);transition:all .15s">
+              📁 Файл
+            </button>
           </div>
-          <div id="afc-img-preview" style="display:none;margin-top:8px;border-radius:var(--rxs);overflow:hidden;height:140px;background:var(--gpal);position:relative">
-            <img id="afc-img-preview-img" src="" alt="preview" style="width:100%;height:100%;object-fit:cover" onerror="document.getElementById('afc-img-preview').style.display='none'"/>
-            <button onclick="clearAdmImg()" style="position:absolute;top:6px;right:6px;background:rgba(0,0,0,.55);color:#fff;border:none;border-radius:50%;width:24px;height:24px;font-size:14px;cursor:pointer;line-height:1;display:flex;align-items:center;justify-content:center" title="Видалити картинку">✕</button>
+          <!-- Панель URL -->
+          <div id="afc-img-panel-url">
+            <input type="url" id="afc-img" placeholder="https://images.unsplash.com/..."
+              oninput="previewAdmImg(this.value)"
+              style="width:100%;border:1.5px solid var(--border);border-radius:var(--rxs);padding:10px 12px;font:14px var(--fb);color:var(--txt);outline:none"
+              onfocus="this.style.borderColor='var(--g2)'" onblur="this.style.borderColor='var(--border)'"/>
+          </div>
+          <!-- Панель Файл -->
+          <div id="afc-img-panel-file" style="display:none">
+            <label for="afc-img-file"
+              style="display:flex;align-items:center;justify-content:center;gap:8px;border:2px dashed var(--gbor);border-radius:var(--rxs);padding:16px;cursor:pointer;color:var(--g2);font:700 13px/1 var(--fb);transition:all .15s;background:var(--gpal)"
+              onmouseover="this.style.borderColor='var(--g2)';this.style.background='#e8f5e9'"
+              onmouseout="this.style.borderColor='var(--gbor)';this.style.background='var(--gpal)'">
+              <svg style="width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              <span id="afc-img-filename">Натисніть або перетягніть файл</span>
+            </label>
+            <input type="file" id="afc-img-file" accept="image/jpeg,image/png,image/webp,image/gif" style="display:none" onchange="uploadAdmImg(this)"/>
+          </div>
+          <!-- Превʼю -->
+          <div id="afc-img-preview" style="display:none;margin-top:10px;border-radius:var(--rxs);overflow:hidden;height:150px;background:var(--gpal);position:relative">
+            <img id="afc-img-preview-img" src="" alt="preview" style="width:100%;height:100%;object-fit:cover"
+              onerror="document.getElementById('afc-img-preview').style.display='none'"/>
+            <button type="button" onclick="clearAdmImg()"
+              style="position:absolute;top:6px;right:6px;background:rgba(0,0,0,.6);color:#fff;border:none;border-radius:50%;width:26px;height:26px;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center"
+              title="Видалити картинку">✕</button>
           </div>
         </div>
         <div class="adm-toggle-row">
