@@ -1237,17 +1237,28 @@ function frontProdToApi(p){
     description:p.desc||null,image_url:p.img||null,is_active:p.inStock!==false};
 }
 async function loadProductsFromApi(){
-  const r=await Api.getProducts();
-  if(!r.ok||!r.data?.items?.length)return false;
-  Object.keys(P).forEach(k=>{P[k]=[];});
-  r.data.items.forEach(ap=>{
-    const cat=ap.category;
-    if(!P[cat])P[cat]=[];
-    P[cat].push(apiProdToFront(ap));
-  });
-  ALL.length=0;
-  for(const c of CAT_LIST){(P[c.key]||[]).forEach(x=>ALL.push(x));}
-  return true;
+  try{
+    const r=await Api.getProducts();
+    console.log('[API] products response:', r.ok, r.data?.items?.length, 'items');
+    if(!r.ok||!r.data?.items?.length){
+      console.log('[API] no items from server, keeping hardcoded products');
+      return false;
+    }
+    // Тільки тепер очищаємо — є реальні товари з БД
+    Object.keys(P).forEach(k=>{P[k]=[];});
+    r.data.items.forEach(ap=>{
+      const cat=ap.category;
+      if(!P[cat])P[cat]=[];
+      P[cat].push(apiProdToFront(ap));
+    });
+    ALL.length=0;
+    for(const c of CAT_LIST){(P[c.key]||[]).forEach(x=>ALL.push(x));}
+    console.log('[API] loaded', ALL.length, 'products from DB');
+    return true;
+  }catch(e){
+    console.error('[API] loadProductsFromApi error:', e);
+    return false;
+  }
 }
 // ── DATA ──
 const IMGS={
@@ -1531,6 +1542,7 @@ function buildCatalogPanels(){
   CAT_KEYS.forEach(cat=>{
     const el=document.getElementById('mcp-'+cat);
     if(!el)return;
+    el.innerHTML=''; // очищаємо перед перебудовою
     const items=P[cat]||[];
     const catName=CAT_NAMES[cat]||cat;
 
@@ -2674,9 +2686,12 @@ function deleteOrder(orderId, clientKey){
   updCart();
   buildReviews();
   applyF();
+  console.log('[API] checking server...');
   const online=await checkApiOnline();
+  console.log('[API] server online:', online);
   if(online){
     const loaded=await loadProductsFromApi();
+    console.log('[API] products loaded from DB:', loaded);
     if(loaded){
       renderHomePopular();
       applyF();
