@@ -1,19 +1,14 @@
 {
-  "name": "family-garden-backend",
+  "name": "family-garden",
   "version": "1.0.0",
-  "description": "REST API for Family Garden shop — products, orders, JWT auth",
-  "main": "server.js",
   "type": "commonjs",
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
     "init-db": "node scripts/init-db.js",
-    "seed": "node scripts/seed.js",
-    "postinstall": "node scripts/init-db.js"
+    "seed": "node scripts/seed.js"
   },
-  "engines": {
-    "node": "22.15.0"
-  },
+  "engines": { "node": ">=18.0.0" },
   "dependencies": {
     "express": "^4.21.2",
     "better-sqlite3": "^11.7.0",
