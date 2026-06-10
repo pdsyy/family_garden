@@ -2450,7 +2450,8 @@ function switchImgTab(tab){
     panelUrl.style.display='none';
   }
 }
-let _admImgUrl=null; // глобальна змінна — надійне сховище URL картинки
+let _admImgUrl=null;    // поточний URL картинки
+let _admImgCleared=false; // true = користувач явно натиснув ✕
 
 function previewAdmImg(url){
   _admImgUrl=url||null; // завжди синхронізуємо
@@ -2531,6 +2532,7 @@ async function uploadAdmImg(input){
 }
 function clearAdmImg(){
   _admImgUrl=null;
+  _admImgCleared=true; // явне очищення
   const urlFld=document.getElementById('afc-img');
   const fileFld=document.getElementById('afc-img-file');
   const filename=document.getElementById('afc-img-filename');
@@ -2568,6 +2570,7 @@ function openCreateForm(editId){
     if(imgFld){
       // Скидаємо перед заповненням
       _admImgUrl=null;
+      _admImgCleared=false;
       previewAdmImg('');
       imgFld.value='';
       switchImgTab('url');
@@ -2601,6 +2604,7 @@ function openCreateForm(editId){
     unitFld.value='кг';
     minFld.value='від 1 кг';
     if(imgFld){imgFld.value='';previewAdmImg('');}
+    _admImgCleared=false;
     const fileFld2=document.getElementById('afc-img-file');
     const fname=document.getElementById('afc-img-filename');
     if(fileFld2)fileFld2.value='';
@@ -2627,9 +2631,10 @@ function saveCreateForm(){
   const price=parseFloat(document.getElementById('afc-price').value)||0;
   const unit=document.getElementById('afc-unit').value.trim()||'кг';
   const min=document.getElementById('afc-min').value.trim();
-  // Читаємо з надійного сховища + fallback на DOM поле
-  const imgRaw=_admImgUrl||(document.getElementById('afc-img')?.value||'').trim()||null;
-  const imgUrl=imgRaw||null;
+  // _admImgCleared=true → явне очищення → передаємо '' в API
+  // _admImgUrl є → новий URL → передаємо його
+  // обидва null/false → не змінювали → передаємо null (API не чіпає поле)
+  const imgUrl=_admImgCleared?'':((_admImgUrl||(document.getElementById('afc-img')?.value||'').trim())||null);
   const inStock=document.getElementById('afc-stock').checked;
 
   if(!name){document.getElementById('afc-name').focus();return;}
@@ -2643,7 +2648,8 @@ function saveCreateForm(){
     const found=findProd(editId);
     if(found){
       const oldCat=found.p.cat;
-      Object.assign(found.p,{name,price,unit,min,cat,catName:catLabel,inStock,img:imgUrl!==null?imgUrl:found.p.img});
+      Object.assign(found.p,{name,price,unit,min,cat,catName:catLabel,inStock,
+      img:_admImgCleared?null:(imgUrl!==null?imgUrl:found.p.img)});
       // if cat changed: move in adminProducts
       if(oldCat!==cat){
         const oldArr=adminProducts[oldCat]||[];
@@ -2658,13 +2664,14 @@ function saveCreateForm(){
     // НЕ мутуємо P тут — тільки adminProducts
     // P оновиться тільки при saveAllAdmin
 
+    _admImgCleared=false;
     closeCreateForm();
     renderAdminTable(cat);
 
     const apiId=found.p._apiId;
     if(API_ONLINE&&Api.getToken()&&apiId){
       Api.updateProduct(apiId,Object.assign({name,category:cat,price,unit,min_order:min||null,is_active:inStock},
-          imgUrl!==null?{image_url:imgUrl}:{}))
+          (_admImgCleared||imgUrl!==null)?{image_url:imgUrl||null}:{}))
         .then(r=>toast(r.ok?`✅ "${name}" збережено в БД`:`✅ "${name}" оновлено`))
         .catch(()=>toast(`✅ "${name}" оновлено`));
     }else{toast(`✅ "${name}" оновлено`);}
