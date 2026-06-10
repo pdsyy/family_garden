@@ -1699,7 +1699,15 @@ function applyF(){
 
 // ── HOME POPULAR ──
 function renderHomePopular(){
-  const pop=POPULAR_IDS.map(id=>ALL.find(p=>p.id===id)).filter(Boolean);
+  // Якщо є товари з API (id=api_*) — беремо перші 10 активних
+  // Якщо захардкоджені — шукаємо по POPULAR_IDS як раніше
+  const hasApiProducts=ALL.some(p=>p._apiId);
+  let pop;
+  if(hasApiProducts){
+    pop=ALL.filter(p=>p.inStock!==false).slice(0,10);
+  }else{
+    pop=POPULAR_IDS.map(id=>ALL.find(p=>p.id===id)).filter(Boolean);
+  }
   const el=document.getElementById('pgrid-home');
   if(el)el.innerHTML=pop.map(pCard).join('');
   // Update category counts
