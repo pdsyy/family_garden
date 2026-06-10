@@ -2273,6 +2273,7 @@ function showAdminPanel(){
 function closeAdminPanel(){
   document.getElementById('adm-panel').style.display='none';
   document.body.style.overflow='';
+  adminProducts=null; // скидаємо робочу копію — при наступному відкритті буде свіжа
 }
 
 const CAT_LIST=[
@@ -2343,20 +2344,12 @@ function toggleStock(id,checked){
   const found=findProd(id);
   if(!found)return;
   found.p.inStock=checked;
-  // also apply to live P immediately
-  for(const c of CAT_LIST){
-    const arr=P[c.key]||[];
-    const p=arr.find(x=>x.id===id);
-    if(p){p.inStock=checked;break;}
-  }
   // re-render row class only (no full re-render to avoid losing focus)
   const row=document.getElementById('arow-'+id);
   if(row){
     if(!checked)row.classList.add('arow-off');
     else row.classList.remove('arow-off');
   }
-  applyF();
-  renderHomePopular();
   const apiId=found.p._apiId;
   if(API_ONLINE&&Api.getToken()&&apiId){
     Api.updateProduct(apiId,{is_active:checked}).catch(()=>{});
@@ -2662,23 +2655,8 @@ function saveCreateForm(){
         }
       }
     }
-    // Синхронізуємо P[cat] з оновленим adminProducts
-    for(const cl of CAT_LIST){
-      const arr=P[cl.key]||[];
-      const idx=arr.findIndex(x=>x.id===editId);
-      if(idx!==-1){Object.assign(arr[idx],found.p);break;}
-    }
-    // Перебудовуємо ALL
-    ALL.length=0;
-    CAT_LIST.forEach(cl=>{(P[cl.key]||[]).forEach(x=>ALL.push(x));});
-    // Оновлюємо картинку в існуючих картках — без перезавантаження
-    const newImgSrc=gImg(found.p);
-    document.querySelectorAll(`.pcard[data-pid="${editId}"] img, .mcp-card img`).forEach(img=>{
-      const card=img.closest('[data-pid]');
-      if(card&&card.getAttribute('data-pid')===editId){img.src=newImgSrc;}
-    });
-    // Якщо картки немає в DOM (каталог не відкритий) — просто оновимо популярні
-    renderHomePopular();
+    // НЕ мутуємо P тут — тільки adminProducts
+    // P оновиться тільки при saveAllAdmin
 
     closeCreateForm();
     renderAdminTable(cat);
