@@ -1031,7 +1031,7 @@ footer{background:var(--g1);color:rgba(255,255,255,.65);padding:32px 28px;displa
     <label class="ro ck" onclick="selPay(this)"><input type="radio" name="pay" value="cash" checked/><div><div class="rl">💵 Готівка при отриманні</div><div class="rd">Під час отримання замовлення кур'єру</div></div></label>
     <label class="ro" onclick="selPay(this)"><input type="radio" name="pay" value="card"/><div><div class="rl">💳 Оплата онлайн</div><div class="rd">Після комплектації ми надішлемо посилання для оплати на ваш номер телефону</div></div></label>
   </div>
-  <div class="fg" style="margin-bottom:14px"><label>Коментар до замовлення</label><textarea style="min-height:80px;resize:vertical;border:1.5px solid var(--border);border-radius:var(--rxs);padding:11px 12px;font:15px var(--fb);outline:none;width:100%;color:var(--txt);transition:border-color .15s" placeholder="Зручний час, побажання, особливості замовлення..."></textarea></div>
+  <div class="fg" style="margin-bottom:14px"><label>Коментар до замовлення</label><textarea id="co-comment" style="min-height:80px;resize:vertical;border:1.5px solid var(--border);border-radius:var(--rxs);padding:11px 12px;font:15px var(--fb);outline:none;width:100%;color:var(--txt);transition:border-color .15s" placeholder="Зручний час, побажання, особливості замовлення..."></textarea></div>
   <button class="pobtn" onclick="tryOrder()">✅ Підтвердити замовлення</button>
   <p style="font-size:13px;color:var(--muted);text-align:center;margin-top:10px;line-height:1.5">Після підтвердження ми зв'яжемося у <strong style="color:var(--g2)">Telegram або Viber</strong> для уточнення деталей</p>
 </div>
@@ -1974,6 +1974,7 @@ function placeOrder(){
 
   const fullName=(name+' '+lname).trim()||'Анонім';
   // Знімок кошика ДО очищення
+  const comment=(document.getElementById('co-comment')?.value||'').trim();
   const cartSnapshot=[...cart];
   const total=cartTot();
 
@@ -1984,6 +1985,7 @@ function placeOrder(){
     items:cartSnapshot.map(i=>({name:i.name,qty:i.qty,price:i.price,unit:i.unit})),
     total:total,
     status:'new',
+    comment:comment||null,
     customer:{name:fullName,phone:phone,tg:tg,addr:addr},
     delivery:dlv==='courier'?'Кур\u2019єр':'Нова Пошта',
     payment:pay==='cash'?'Готівка':'Оплата онлайн',
@@ -1998,6 +2000,8 @@ function placeOrder(){
       localStorage.setItem('fg_admin_orders',JSON.stringify(a));
     }catch(e){}
     toast('✅ Замовлення прийнято! Очікуйте повідомлення.');
+    const coComment=document.getElementById('co-comment');
+    if(coComment)coComment.value='';
     cart=[];window.cart=cart;saveCart();updCart();reRenderProductCards();
     setTimeout(()=>pg('home'),1800);
   };
@@ -2012,6 +2016,7 @@ function placeOrder(){
       delivery_type:dlv,
       delivery_addr:addr,
       payment_method:pay,
+      comment:comment||null,
       items:cartSnapshot.map(i=>({product_id:i._apiId,quantity:i.qty}))
     }).then(r=>{
       if(!r.ok){
@@ -2047,7 +2052,19 @@ function goCheckout(){
 }
 
 // ── ACCOUNT ──
-function openAccount(){if(!user){openM('auth-modal');return;}renderAccount();pg('account');}
+function openAccount(){
+  if(!user){
+    // Очищаємо поля перед відкриттям
+    ['l-ph','l-ps','r-nm','r-ph','r-ps'].forEach(fid=>{
+      const el=document.getElementById(fid);
+      if(el)el.value='';
+    });
+    authTab('login');
+    openM('auth-modal');
+    return;
+  }
+  renderAccount();pg('account');
+}
 function renderAccount(){
   const nm=user.name||'Користувач',orders=user.orders||[];
   document.getElementById('ac-body').innerHTML=`
@@ -2102,7 +2119,18 @@ function logout(){
 
 // ── MODALS ──
 function openM(id){document.getElementById(id).classList.add('open');document.body.style.overflow='hidden';}
-function closeM(id){document.getElementById(id).classList.remove('open');document.body.style.overflow='';}
+function closeM(id){
+  document.getElementById(id).classList.remove('open');
+  document.body.style.overflow='';
+  // Очищаємо поля форм авторизації
+  if(id==='auth-modal'){
+    ['l-ph','l-ps','r-nm','r-ph','r-ps'].forEach(fid=>{
+      const el=document.getElementById(fid);
+      if(el)el.value='';
+    });
+    authTab('login'); // скидаємо на вкладку входу
+  }
+}
 document.querySelectorAll('.modal-ov,.pop-ov').forEach(el=>{el.addEventListener('click',function(e){if(e.target===this)closeM(this.id);});});
 
 // ── AUTH ──
@@ -2745,6 +2773,7 @@ function loadAdminOrders(){
               total:o.total_amount||0,
               status:o.status||'new',
               customer:{name:o.customer_name||'',phone:o.customer_phone||'',tg:o.customer_tg||'',addr:o.delivery_addr||''},
+              comment:o.comment||null,
               delivery:o.delivery_type==='courier'?'Кур’єр':'Нова Пошта',
               payment:o.payment_method==='cash'?'Готівка':'Оплата онлайн',
             });
@@ -2762,6 +2791,7 @@ function loadAdminOrders(){
               timestamp:new Date(o.created_at||Date.now()).getTime(),
               items:[],total:o.total_amount||0,status:o.status||'new',
               customer:{name:o.customer_name||'',phone:o.customer_phone||'',tg:o.customer_tg||'',addr:o.delivery_addr||''},
+              comment:o.comment||null,
               delivery:o.delivery_type==='courier'?'Кур’єр':'Нова Пошта',
               payment:o.payment_method==='cash'?'Готівка':'Оплата онлайн',
             });
@@ -2923,6 +2953,7 @@ function renderOrderCard(order, clientKey){
           <span class="adm-oc-item-price">${i.price*i.qty} грн</span>
         </div>`).join('')}
     </div>
+    ${order.comment?`<div style="background:var(--gpal);border-radius:var(--rxs);padding:8px 12px;font-size:13px;color:var(--txt);margin-bottom:8px">💬 <strong>Коментар:</strong> ${escHtml(order.comment)}</div>`:''}
     <div class="adm-oc-footer">
       <div>
         <div class="adm-oc-total">Разом: ${order.total} грн</div>
