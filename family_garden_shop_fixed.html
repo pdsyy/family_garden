@@ -2841,7 +2841,7 @@ function switchAdmTab(tab){
 
 function updateOrdersBadge(){
   const badge=document.getElementById('adm-orders-cnt');
-  const newCnt=allAdminOrders.filter(o=>o.status==='new').length;
+  const newCnt=allAdminOrders.filter(o=>o.status==='new'&&!o.seen).length;
   if(badge){badge.textContent=newCnt||'';badge.style.display=newCnt?'inline':'none';}
 }
 
@@ -2868,7 +2868,7 @@ function renderClientList(q){
   }
   el.innerHTML=filtered.map(g=>{
     const total=g.orders.reduce((s,o)=>s+o.total,0);
-    const hasNew=g.orders.some(o=>o.status==='new');
+    const hasNew=g.orders.some(o=>o.status==='new'&&!o.seen);
     return `<div class="adm-client-item${selectedClientKey===g.key?' act':''}" onclick="selectClient('${g.key}')">
       ${hasNew?`<div style="position:absolute;top:12px;right:12px;width:8px;height:8px;background:var(--red);border-radius:50%"></div>`:''}
       <div class="adm-ci-name">${escHtml(g.name)}</div>
@@ -2883,8 +2883,17 @@ function renderClientList(q){
 
 function selectClient(key){
   selectedClientKey=key;
+  // Помічаємо всі замовлення цього клієнта як переглянуті
+  allAdminOrders.forEach(o=>{
+    const c=o.customer||{};
+    const k=(c.phone||c.name||'anon').replace(/\s/g,'');
+    if(k===key)o.seen=true;
+  });
+  // Зберігаємо в localStorage
+  try{localStorage.setItem('fg_admin_orders',JSON.stringify(allAdminOrders));}catch(e){}
   const q=document.getElementById('adm-client-search')?.value||'';
   renderClientList(q);
+  updateOrdersBadge();
   const groups=groupByClient(allAdminOrders);
   const client=groups.find(g=>g.key===key);
   if(!client)return;
