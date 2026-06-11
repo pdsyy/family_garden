@@ -42,7 +42,6 @@ app.use('/api/', rLimit({ windowMs: 15*60*1000, max: 500, standardHeaders: true,
 app.use('/public', express.static(path.join(__dirname, 'public')));
 app.use(express.json({ limit: '200kb' }));
 
-
 /* ── Static frontend ── */
 const HTML = path.join(__dirname, 'family_garden_shop_fixed.html');
 app.get('/', (req, res) => res.sendFile(HTML));
