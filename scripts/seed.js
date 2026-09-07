@@ -23,8 +23,8 @@ const PRODUCTS = [
   { name:'Айсберг',            category:'zelen',   price:140, unit:'шт',      min_order:'від 1 шт' },
   { name:'Шпинат',             category:'zelen',   price:120, unit:'грами',   min_order:'від 100 г' },
   // Яйця
-  { name:'Яйця домашні С1',    category:'yaytsia', price:110, unit:'десяток', min_order:'від 1 десятка' },
-  { name:'Яйця перепелині',    category:'yaytsia', price:95,  unit:'десяток', min_order:'від 1 десятка' },
+  { name:'Яйця домашні С1',    category:'yaytsia', price:110, unit:'шт',      min_order:'від 10 шт' },
+  { name:'Яйця перепелині',    category:'yaytsia', price:95,  unit:'шт',      min_order:'від 10 шт' },
 ];
 
 const insert = db.prepare(`
