@@ -2881,61 +2881,61 @@
 
         main.innerHTML=`
     <!-- Client Header -->
-        <div class="adm-client-detail-head">
-        <div class="adm-client-avatar">👤</div>
-        <div class="adm-client-info">
+    <div class="adm-client-detail-head">
+      <div class="adm-client-avatar">👤</div>
+      <div class="adm-client-info">
         <div class="adm-client-info-name">${escHtml(client.name)}</div>
         <div class="adm-client-info-grid">
-        <div class="adm-cig-item"><div class="adm-cig-label">📞 Телефон</div><div class="adm-cig-val">${escHtml(client.phone)}</div></div>
-        ${client.tg?`<div class="adm-cig-item"><div class="adm-cig-label">✈️ Telegram</div><div class="adm-cig-val"><a href="https://t.me/${client.tg.replace('@','')}" target="_blank" style="color:var(--g2);text-decoration:none">${escHtml(client.tg)}</a></div></div>`:''}
-        ${client.addr?`<div class="adm-cig-item"><div class="adm-cig-label">📍 Адреса</div><div class="adm-cig-val">${escHtml(client.addr)}</div></div>`:''}
-        <div class="adm-cig-item"><div class="adm-cig-label">🗓 Останнє замовл.</div><div class="adm-cig-val">${lastOrder}</div></div>
+          <div class="adm-cig-item"><div class="adm-cig-label">📞 Телефон</div><div class="adm-cig-val">${escHtml(client.phone)}</div></div>
+          ${client.tg?`<div class="adm-cig-item"><div class="adm-cig-label">✈️ Telegram</div><div class="adm-cig-val"><a href="https://t.me/${client.tg.replace('@','')}" target="_blank" style="color:var(--g2);text-decoration:none">${escHtml(client.tg)}</a></div></div>`:''}
+          ${client.addr?`<div class="adm-cig-item"><div class="adm-cig-label">📍 Адреса</div><div class="adm-cig-val">${escHtml(client.addr)}</div></div>`:''}
+          <div class="adm-cig-item"><div class="adm-cig-label">🗓 Останнє замовл.</div><div class="adm-cig-val">${lastOrder}</div></div>
         </div>
-        </div>
-        </div>
+      </div>
+    </div>
 
-            <!-- Stats -->
-        <div class="adm-client-stats">
-        <div class="adm-cs"><strong>${client.orders.length}</strong><span>Замовлень</span></div>
-        <div class="adm-cs"><strong>${totalSpent} грн</strong><span>Всього витрачено</span></div>
-        <div class="adm-cs"><strong>${avgOrder} грн</strong><span>Середній чек</span></div>
-        <div class="adm-cs"><strong>${client.orders.filter(o=>o.status==='new').length}</strong><span>Нових</span></div>
-        </div>
+    <!-- Stats -->
+    <div class="adm-client-stats">
+      <div class="adm-cs"><strong>${client.orders.length}</strong><span>Замовлень</span></div>
+      <div class="adm-cs"><strong>${totalSpent} грн</strong><span>Всього витрачено</span></div>
+      <div class="adm-cs"><strong>${avgOrder} грн</strong><span>Середній чек</span></div>
+      <div class="adm-cs"><strong>${client.orders.filter(o=>o.status==='new').length}</strong><span>Нових</span></div>
+    </div>
 
-            <!-- Orders history -->
-        <div style="font:800 15px/1 var(--fb);color:var(--txt);margin-bottom:12px">Історія замовлень</div>
-            ${client.orders.map(o=>renderOrderCard(o,client.key)).join('')}
-        `;
-}
+    <!-- Orders history -->
+    <div style="font:800 15px/1 var(--fb);color:var(--txt);margin-bottom:12px">Історія замовлень</div>
+    ${client.orders.map(o=>renderOrderCard(o,client.key)).join('')}
+  `;
+    }
 
-const ORDER_STATUSES=[
-  {val:'new',label:'Нове'},
-  {val:'confirmed',label:'Підтверджено'},
-  {val:'delivered',label:'Доставлено'},
-  {val:'cancelled',label:'Скасовано'},
-];
+        const ORDER_STATUSES=[
+            {val:'new',label:'Нове'},
+            {val:'confirmed',label:'Підтверджено'},
+            {val:'delivered',label:'Доставлено'},
+            {val:'cancelled',label:'Скасовано'},
+        ];
 
-function renderOrderCard(order, clientKey){
-  const statusLabels={new:'Нове',confirmed:'Підтверджено',delivered:'Доставлено',cancelled:'Скасовано'};
-  const st=order.status||'new';
-  return `<div class="adm-order-card">
-        <div class="adm-oc-head">
-        <div>
+        function renderOrderCard(order, clientKey){
+            const statusLabels={new:'Нове',confirmed:'Підтверджено',delivered:'Доставлено',cancelled:'Скасовано'};
+            const st=order.status||'new';
+            return `<div class="adm-order-card">
+    <div class="adm-oc-head">
+      <div>
         <div class="adm-oc-id">Замовлення ${order.id}</div>
         <div class="adm-oc-date">📅 ${order.date}</div>
-        </div>
-        <select class="adm-status-select" onchange="changeOrderStatus('${order.id}','${clientKey}',this.value)">
+      </div>
+      <select class="adm-status-select" onchange="changeOrderStatus('${order.id}','${clientKey}',this.value)">
         ${ORDER_STATUSES.map(s=>`<option value="${s.val}"${st===s.val?' selected':''}>${s.label}</option>`).join('')}
-        </select>
-        </div>
-        <div class="adm-oc-items">
-        ${(order.items||[]).map(i=>`
+      </select>
+    </div>
+    <div class="adm-oc-items">
+      ${(order.items||[]).map(i=>`
         <div class="adm-oc-item">
           <span class="adm-oc-item-name">${escHtml(i.name)} × ${i.qty} ${i.unit}</span>
           <span class="adm-oc-item-price">${i.price*i.qty} грн</span>
         </div>`).join('')}
-        </div>
-            ${order.comment?`<div style="background:var(--gpal);border-radius:var(--rxs);padding:8px 12px;font-size:13px;color:var(--txt);margin-bottom:8px">💬 <strong>Коментар:</strong> ${escHtml(order.comment)}</div>`:''}
+    </div>
+    ${order.comment?`<div style="background:var(--gpal);border-radius:var(--rxs);padding:8px 12px;font-size:13px;color:var(--txt);margin-bottom:8px">💬 <strong>Коментар:</strong> ${escHtml(order.comment)}</div>`:''}
     <div class="adm-oc-footer">
       <div>
         <div class="adm-oc-total">Разом: ${order.total} грн</div>
